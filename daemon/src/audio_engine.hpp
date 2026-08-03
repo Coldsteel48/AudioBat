@@ -1,35 +1,47 @@
-// AudioDock
+// AudioBat
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioDock, dual-licensed under the GNU General
+// This file is part of AudioBat, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
 
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <vector>
 
-#include "audiodock/protocol.hpp"
-#include "audiodock/ring_buffer.hpp"
+#include "audiobat/protocol.hpp"
+#include "audiobat/ring_buffer.hpp"
+#include "dsp/speaker_layout.hpp"
 
 struct pw_main_loop;
 struct pw_loop;
 
-namespace audiodock
+namespace audiobat
 {
 
 class VirtualSink;
 class HardwareOutput;
 class DspStage;
+class PassthroughStage;
+class AmbisonicsStage;
+class BinauralStage;
 class ControlServer;
+class DeviceRegistry;
 
 // Owns the whole daemon pipeline: PipeWire main loop, the virtual sink
-// (capture), the DSP stage, the hardware output (playback), and the
+// (capture), the DSP stages, the hardware output (playback), and the
 // control socket. Bridges the capture and playback streams' process
 // callbacks through a ring buffer since their block sizes aren't
 // guaranteed to match.
+//
+// One instance of every spatial mode's stage (Off/Basic/Advanced) is kept
+// alive at once; HandleVirtualSinkAudio() just dispatches to whichever
+// Mode currently selects. All three encode from the same SharedLayout, so
+// repositioning a virtual speaker affects whichever mode is active and
+// GetStatus always reports one consistent layout regardless of mode.
 class AudioEngine
 {
 public:
@@ -55,7 +67,15 @@ private:
 
     void HandleVirtualSinkAudio(const float* Interleaved, uint32_t Frames);
     uint32_t HandleHardwareOutputRequest(float* Interleaved, uint32_t Frames);
-    Status HandleControlCommand(const Command& InCommand);
+    std::vector<uint8_t> HandleControlCommand(const Command& InCommand);
+
+    // Returns whichever concrete stage Mode currently selects.
+    DspStage& ActiveStage();
+
+    // Resolves the SOFA file BinauralStage should load: the
+    // AUDIOBAT_HRTF_SOFA environment variable if set, else the bundled
+    // default (see data/hrtf/README.md).
+    static std::string ResolveHrtfSofaPath();
 
     bool bPipeWireInitialized = false;
     pw_main_loop* MainLoop = nullptr;
@@ -63,8 +83,15 @@ private:
 
     std::unique_ptr<VirtualSink> Sink;
     std::unique_ptr<HardwareOutput> Output;
-    std::unique_ptr<DspStage> Stage;
     std::unique_ptr<ControlServer> Server;
+    std::unique_ptr<DeviceRegistry> Devices;
+
+    SpeakerLayout SharedLayout;
+    std::atomic<SpatialMode> Mode{SpatialMode::Off};
+
+    std::unique_ptr<PassthroughStage> OffStage;
+    std::unique_ptr<AmbisonicsStage> BasicStage;
+    std::unique_ptr<BinauralStage> AdvancedStage;
 
     // Holds processed (post-DSP) interleaved stereo samples awaiting
     // playback. Sized generously relative to a typical PipeWire quantum.
@@ -75,4 +102,4 @@ private:
     std::vector<float> DspScratch;
 };
 
-} // namespace audiodock
+} // namespace audiobat

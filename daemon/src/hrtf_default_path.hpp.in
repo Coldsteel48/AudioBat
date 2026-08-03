@@ -6,13 +6,12 @@
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
 
-#include "audio_engine.hpp"
+// CMake-generated: absolute path to the bundled default HRTF SOFA file
+// (see data/hrtf/README.md), used when AUDIOBAT_HRTF_SOFA isn't set.
 
-int main(int argc, char** argv)
+#pragma once
+
+namespace audiobat
 {
-    (void)argc;
-    (void)argv;
-
-    audiobat::AudioEngine Engine;
-    return Engine.Run();
-}
+inline constexpr const char* DefaultHrtfSofaPath = "@AUDIOBAT_DEFAULT_HRTF_SOFA_PATH@";
+} // namespace audiobat

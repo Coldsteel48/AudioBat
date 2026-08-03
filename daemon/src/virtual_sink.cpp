@@ -1,7 +1,7 @@
-// AudioDock
+// AudioBat
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioDock, dual-licensed under the GNU General
+// This file is part of AudioBat, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -14,7 +14,7 @@
 #include <spa/param/audio/format-utils.h>
 #include <spa/utils/result.h>
 
-namespace audiodock
+namespace audiobat
 {
 
 namespace
@@ -30,7 +30,7 @@ void OnStateChanged(void* UserData, enum pw_stream_state OldState, enum pw_strea
 {
     (void)UserData;
     (void)OldState;
-    fprintf(stderr, "[audiodockd] virtual sink state: %s%s%s\n", pw_stream_state_as_string(NewState),
+    fprintf(stderr, "[audiobatd] virtual sink state: %s%s%s\n", pw_stream_state_as_string(NewState),
             ErrorMessage ? " error: " : "", ErrorMessage ? ErrorMessage : "");
 }
 
@@ -66,15 +66,15 @@ bool VirtualSink::Start()
 {
     pw_properties* Props = pw_properties_new(PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY,
                                               "Capture", PW_KEY_MEDIA_CLASS, "Audio/Sink",
-                                              PW_KEY_NODE_NAME, "audiodock_virtual_sink",
-                                              PW_KEY_NODE_DESCRIPTION, "AudioDock Virtual Sink",
+                                              PW_KEY_NODE_NAME, NodeName,
+                                              PW_KEY_NODE_DESCRIPTION, "AudioBat Virtual Sink",
                                               PW_KEY_NODE_VIRTUAL, "true", PW_KEY_AUDIO_CHANNELS,
                                               "8", nullptr);
 
-    Stream = pw_stream_new_simple(Loop, "AudioDock Virtual Sink", Props, &StreamEvents, this);
+    Stream = pw_stream_new_simple(Loop, "AudioBat Virtual Sink", Props, &StreamEvents, this);
     if (!Stream)
     {
-        fprintf(stderr, "[audiodockd] failed to create virtual sink stream\n");
+        fprintf(stderr, "[audiobatd] failed to create virtual sink stream\n");
         return false;
     }
 
@@ -105,7 +105,7 @@ bool VirtualSink::Start()
     int Result = pw_stream_connect(Stream, PW_DIRECTION_INPUT, PW_ID_ANY, Flags, Params, 1);
     if (Result < 0)
     {
-        fprintf(stderr, "[audiodockd] failed to connect virtual sink stream: %s\n",
+        fprintf(stderr, "[audiobatd] failed to connect virtual sink stream: %s\n",
                 spa_strerror(Result));
         return false;
     }
@@ -136,4 +136,4 @@ void VirtualSink::HandleProcess()
     pw_stream_queue_buffer(Stream, PwBuffer);
 }
 
-} // namespace audiodock
+} // namespace audiobat

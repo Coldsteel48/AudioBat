@@ -1,25 +1,30 @@
-// AudioDock
+// AudioBat
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioDock, dual-licensed under the GNU General
+// This file is part of AudioBat, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
 
 #include "audio_engine.hpp"
 
-#include <csignal>
 #include <cstdio>
+#include <cstdlib>
+#include <csignal>
 
 #include <pipewire/pipewire.h>
 
 #include "control/control_server.hpp"
+#include "device_registry.hpp"
 #include "dsp/ambisonics_stage.hpp"
+#include "dsp/binaural_stage.hpp"
 #include "dsp/dsp_stage.hpp"
+#include "dsp/passthrough_stage.hpp"
 #include "hardware_output.hpp"
+#include "hrtf_default_path.hpp"
 #include "virtual_sink.hpp"
 
-namespace audiodock
+namespace audiobat
 {
 
 namespace
@@ -27,8 +32,11 @@ namespace
 // Scratch/mix buffer sizing: generous relative to a typical PipeWire
 // quantum (usually 1024 frames, occasionally up to a few thousand under
 // high-latency settings). Blocks larger than this are clamped rather than
-// risking an allocation on the realtime thread.
-constexpr uint32_t MaxScratchFrames = 8192;
+// risking an allocation on the realtime thread. Kept equal to
+// DspStage::MaxProcessFrames so every stage's own scratch buffers (e.g.
+// BinauralStage's virtual speaker signals) are sized consistently with
+// what AudioEngine will ever actually pass to Process().
+constexpr uint32_t MaxScratchFrames = MaxProcessFrames;
 
 // Hardcoded for now (Arctis 7P+ Analog Stereo, from `wpctl status` /
 // `pw-cli info <sink-id>`) - test-only target while the pipeline is being
@@ -44,6 +52,15 @@ AudioEngine::~AudioEngine()
     Teardown();
 }
 
+std::string AudioEngine::ResolveHrtfSofaPath()
+{
+    if (const char* Override = std::getenv("AUDIOBAT_HRTF_SOFA"))
+    {
+        return Override;
+    }
+    return DefaultHrtfSofaPath;
+}
+
 int AudioEngine::Run()
 {
     pw_init(nullptr, nullptr);
@@ -52,7 +69,7 @@ int AudioEngine::Run()
     MainLoop = pw_main_loop_new(nullptr);
     if (!MainLoop)
     {
-        fprintf(stderr, "[audiodockd] failed to create PipeWire main loop\n");
+        fprintf(stderr, "[audiobatd] failed to create PipeWire main loop\n");
         Teardown();
         return 1;
     }
@@ -65,14 +82,17 @@ int AudioEngine::Run()
     // default disposition, bypassing this handler entirely.
     auto OnSignal = [](void* Data, int SignalNumber)
     {
-        fprintf(stderr, "[audiodockd] received signal %d, shutting down\n", SignalNumber);
+        fprintf(stderr, "[audiobatd] received signal %d, shutting down\n", SignalNumber);
         static_cast<AudioEngine*>(Data)->Stop();
     };
     pw_loop_add_signal(Loop, SIGINT, OnSignal, this);
     pw_loop_add_signal(Loop, SIGTERM, OnSignal, this);
 
     DspScratch.resize(MaxScratchFrames * HardwareOutput::Channels);
-    Stage = std::make_unique<AmbisonicsStage>();
+    OffStage = std::make_unique<PassthroughStage>();
+    BasicStage = std::make_unique<AmbisonicsStage>(SharedLayout);
+    AdvancedStage = std::make_unique<BinauralStage>(SharedLayout, ResolveHrtfSofaPath(),
+                                                      static_cast<float>(HardwareOutput::SampleRate));
 
     Sink = std::make_unique<VirtualSink>(Loop);
     Sink->SetAudioCallback(
@@ -98,6 +118,13 @@ int AudioEngine::Run()
         return 1;
     }
 
+    Devices = std::make_unique<DeviceRegistry>(Loop);
+    if (!Devices->Start())
+    {
+        Teardown();
+        return 1;
+    }
+
     Server = std::make_unique<ControlServer>(DefaultControlSocketPath());
     Server->SetCommandHandler(
         [this](const Command& InCommand)
@@ -110,7 +137,7 @@ int AudioEngine::Run()
         return 1;
     }
 
-    fprintf(stderr, "[audiodockd] running (pass-through mode). Ctrl+C to stop.\n");
+    fprintf(stderr, "[audiobatd] running (pass-through mode). Ctrl+C to stop.\n");
     pw_main_loop_run(MainLoop);
 
     Teardown();
@@ -132,9 +159,12 @@ void AudioEngine::Teardown()
         Server->Stop();
         Server.reset();
     }
+    Devices.reset();
     Output.reset();
     Sink.reset();
-    Stage.reset();
+    OffStage.reset();
+    BasicStage.reset();
+    AdvancedStage.reset();
 
     if (MainLoop)
     {
@@ -150,6 +180,20 @@ void AudioEngine::Teardown()
     }
 }
 
+DspStage& AudioEngine::ActiveStage()
+{
+    switch (Mode.load(std::memory_order_relaxed))
+    {
+    case SpatialMode::Basic:
+        return *BasicStage;
+    case SpatialMode::Advanced:
+        return *AdvancedStage;
+    case SpatialMode::Off:
+    default:
+        return *OffStage;
+    }
+}
+
 void AudioEngine::HandleVirtualSinkAudio(const float* Interleaved, uint32_t Frames)
 {
     if (Frames > MaxScratchFrames)
@@ -157,8 +201,8 @@ void AudioEngine::HandleVirtualSinkAudio(const float* Interleaved, uint32_t Fram
         Frames = MaxScratchFrames; // drop overflow rather than overrun the scratch buffer
     }
 
-    Stage->Process(Interleaved, VirtualSink::Channels, DspScratch.data(),
-                    HardwareOutput::Channels, Frames);
+    ActiveStage().Process(Interleaved, VirtualSink::Channels, DspScratch.data(),
+                           HardwareOutput::Channels, Frames);
     StereoMixBuffer.Push(DspScratch.data(), Frames * HardwareOutput::Channels);
 }
 
@@ -168,17 +212,45 @@ uint32_t AudioEngine::HandleHardwareOutputRequest(float* Interleaved, uint32_t F
     return static_cast<uint32_t>(Popped / HardwareOutput::Channels);
 }
 
-Status AudioEngine::HandleControlCommand(const Command& InCommand)
+std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
 {
-    if (InCommand.CommandOpcode == Opcode::SetThreeDEnabled)
+    if (InCommand.CommandOpcode == Opcode::GetDevices)
     {
-        Stage->SetThreeDEnabled(InCommand.bEnabledValue);
-        fprintf(stderr, "[audiodockd] 3D processing %s\n", InCommand.bEnabledValue ? "enabled" : "disabled");
+        return EncodeDeviceListResponse(Devices->GetDevices());
+    }
+
+    if (InCommand.CommandOpcode == Opcode::SetSpatialMode)
+    {
+        Mode.store(InCommand.ModeValue, std::memory_order_relaxed);
+        fprintf(stderr, "[audiobatd] spatial mode set to %d\n", static_cast<int>(InCommand.ModeValue));
+    }
+    else if (InCommand.CommandOpcode == Opcode::SetSpeakerAzimuth)
+    {
+        SharedLayout.SetSpeakerAzimuth(
+            static_cast<SpeakerLayout::SpeakerChannel>(InCommand.SpeakerIndex), InCommand.AzimuthDegrees);
+    }
+    else if (InCommand.CommandOpcode == Opcode::ResetSpeakerPositions)
+    {
+        SharedLayout.ResetSpeakerAzimuths();
+    }
+    else if (InCommand.CommandOpcode == Opcode::SetOutputDevice)
+    {
+        if (!Output->SetTargetNode(InCommand.OutputDeviceName))
+        {
+            fprintf(stderr, "[audiobatd] failed to switch output device to %s\n",
+                    InCommand.OutputDeviceName.c_str());
+        }
     }
 
     Status OutStatus;
-    OutStatus.bThreeDEnabled = Stage->IsThreeDEnabled();
-    return OutStatus;
+    OutStatus.Mode = Mode.load(std::memory_order_relaxed);
+    OutStatus.OutputDeviceName = Output->GetTargetNodeName();
+    for (uint8_t i = 0; i < SpeakerCount; ++i)
+    {
+        OutStatus.SpeakerAzimuthDegrees[i] =
+            SharedLayout.GetSpeakerAzimuth(static_cast<SpeakerLayout::SpeakerChannel>(i));
+    }
+    return EncodeStatusResponse(OutStatus);
 }
 
-} // namespace audiodock
+} // namespace audiobat

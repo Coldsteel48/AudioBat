@@ -1,7 +1,7 @@
-# AudioDock
+# AudioBat
 # Copyright (C) 2026 Roman Levin (Coldsteel48)
 #
-# This file is part of AudioDock, dual-licensed under the GNU General
+# This file is part of AudioBat, dual-licensed under the GNU General
 # Public License v3.0 (see LICENSE) or a separate commercial license
 # (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 # terms of the Contributor License Agreement (see CLA.md).
@@ -10,18 +10,69 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
 find_package(Threads REQUIRED)
 
-add_executable(audiodockd
+# libmysofa (HRTF/SOFA file loading) and KissFFT (partitioned convolution)
+# back BinauralStage's HRTF binaural decode ("Advanced" spatial mode). Both
+# are BSD-3-Clause (permissive), matching the constraint in README.md's
+# "Engineering approach" section; fetched the same way gui/CMakeLists.txt
+# already fetches Dear ImGui, since neither ships as a common distro
+# package.
+include(FetchContent)
+
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    mysofa
+    GIT_REPOSITORY https://github.com/hoene/libmysofa.git
+    GIT_TAG v1.3.5
+)
+FetchContent_MakeAvailable(mysofa)
+
+set(KISSFFT_STATIC ON CACHE BOOL "" FORCE)
+set(KISSFFT_TEST OFF CACHE BOOL "" FORCE)
+set(KISSFFT_TOOLS OFF CACHE BOOL "" FORCE)
+set(KISSFFT_PKGCONFIG OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    kissfft
+    GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
+    GIT_TAG 131.2.0
+)
+FetchContent_MakeAvailable(kissfft)
+
+# Absolute path to the bundled default HRTF SOFA file (see
+# data/hrtf/README.md), baked in as the fallback when the
+# AUDIOBAT_HRTF_SOFA environment variable isn't set.
+set(AUDIOBAT_DEFAULT_HRTF_SOFA_PATH "${CMAKE_SOURCE_DIR}/data/hrtf/default.sofa")
+configure_file(
+    src/hrtf_default_path.hpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/hrtf_default_path.hpp
+    @ONLY
+)
+
+add_executable(audiobatd
     src/main.cpp
     src/audio_engine.cpp
     src/virtual_sink.cpp
     src/hardware_output.cpp
+    src/device_registry.cpp
     src/dsp/passthrough_stage.cpp
+    src/dsp/speaker_layout.cpp
     src/dsp/ambisonics_stage.cpp
+    src/dsp/hrtf_loader.cpp
+    src/dsp/partitioned_convolver.cpp
+    src/dsp/binaural_stage.cpp
     src/control/control_server.cpp
 )
 
-target_link_libraries(audiodockd PRIVATE
-    audiodock_common
+target_include_directories(audiobatd PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}/generated
+    ${mysofa_BINARY_DIR}/src # generated mysofa_export.h, not part of mysofa-static's public interface
+)
+
+target_link_libraries(audiobatd PRIVATE
+    audiobat_common
     PkgConfig::PIPEWIRE
     Threads::Threads
+    mysofa-static
+    kissfft::kissfft
 )

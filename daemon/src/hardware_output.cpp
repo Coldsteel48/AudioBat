@@ -1,7 +1,7 @@
-// AudioDock
+// AudioBat
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioDock, dual-licensed under the GNU General
+// This file is part of AudioBat, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -16,7 +16,7 @@
 #include <spa/param/audio/format-utils.h>
 #include <spa/utils/result.h>
 
-namespace audiodock
+namespace audiobat
 {
 
 namespace
@@ -32,7 +32,7 @@ void OnStateChanged(void* UserData, enum pw_stream_state OldState, enum pw_strea
 {
     (void)UserData;
     (void)OldState;
-    fprintf(stderr, "[audiodockd] hardware output state: %s%s%s\n", pw_stream_state_as_string(NewState),
+    fprintf(stderr, "[audiobatd] hardware output state: %s%s%s\n", pw_stream_state_as_string(NewState),
             ErrorMessage ? " error: " : "", ErrorMessage ? ErrorMessage : "");
 }
 
@@ -69,11 +69,11 @@ bool HardwareOutput::Start()
 {
     pw_properties* Props =
         pw_properties_new(PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY, "Playback",
-                           PW_KEY_MEDIA_ROLE, "Music", PW_KEY_NODE_NAME, "audiodock_output",
-                           PW_KEY_NODE_DESCRIPTION, "AudioDock Spatialized Output", nullptr);
+                           PW_KEY_MEDIA_ROLE, "Music", PW_KEY_NODE_NAME, "audiobat_output",
+                           PW_KEY_NODE_DESCRIPTION, "AudioBat Spatialized Output", nullptr);
 
     // Pin to a specific hardware node instead of "default sink": this is
-    // what makes it safe to later set the AudioDock virtual sink as the
+    // what makes it safe to later set the AudioBat virtual sink as the
     // system default without the output stream looping back into it.
     //
     // target.object alone is only an initial-link hint - WirePlumber's
@@ -85,13 +85,75 @@ bool HardwareOutput::Start()
     pw_properties_set(Props, PW_KEY_TARGET_OBJECT, TargetNodeName.c_str());
     pw_properties_set(Props, PW_KEY_NODE_DONT_RECONNECT, "true");
 
-    Stream = pw_stream_new_simple(Loop, "AudioDock Output", Props, &StreamEvents, this);
+    Stream = pw_stream_new_simple(Loop, "AudioBat Output", Props, &StreamEvents, this);
     if (!Stream)
     {
-        fprintf(stderr, "[audiodockd] failed to create hardware output stream\n");
+        fprintf(stderr, "[audiobatd] failed to create hardware output stream\n");
         return false;
     }
 
+    return ConnectStream();
+}
+
+bool HardwareOutput::SetTargetNode(std::string NewTargetNodeName)
+{
+    if (NewTargetNodeName == TargetNodeName)
+    {
+        return true;
+    }
+    if (!Stream)
+    {
+        // Not started yet; Start() will pick up TargetNodeName below.
+        TargetNodeName = std::move(NewTargetNodeName);
+        return true;
+    }
+
+    // Assigning TargetNodeName here (rather than inside
+    // ReconnectOnLoopThread) is safe even though it happens off the loop
+    // thread: the loop thread only reads it via ConnectStream(), which is
+    // invoked strictly after this assignment completes (pw_loop_invoke
+    // below blocks until it runs).
+    TargetNodeName = std::move(NewTargetNodeName);
+
+    struct InvokeContext
+    {
+        HardwareOutput* Self;
+        bool bSuccess = false;
+    } Context{this};
+
+    auto InvokeFunc = [](struct spa_loop*, bool, uint32_t, const void*, size_t, void* UserData) -> int
+    {
+        auto* Ctx = static_cast<InvokeContext*>(UserData);
+        Ctx->bSuccess = Ctx->Self->ReconnectOnLoopThread();
+        return 0;
+    };
+
+    // Blocking invoke: pw_stream_disconnect/update_properties/connect are
+    // only safe to call from the PipeWire loop thread, and the caller
+    // (ControlServer's client thread) needs the result before it can
+    // reply, so there's no reason to make this async.
+    pw_loop_invoke(Loop, InvokeFunc, 0, nullptr, 0, true, &Context);
+    return Context.bSuccess;
+}
+
+bool HardwareOutput::ReconnectOnLoopThread()
+{
+    pw_stream_disconnect(Stream);
+
+    // Same reasoning as Start(): target.object is only an initial-link
+    // hint, dont-reconnect is what keeps WirePlumber's default-device
+    // policy from relinking this stream onto the new default sink instead.
+    pw_properties* Props =
+        pw_properties_new(PW_KEY_TARGET_OBJECT, TargetNodeName.c_str(), PW_KEY_NODE_DONT_RECONNECT,
+                           "true", nullptr);
+    pw_stream_update_properties(Stream, &Props->dict);
+    pw_properties_free(Props);
+
+    return ConnectStream();
+}
+
+bool HardwareOutput::ConnectStream()
+{
     uint8_t Buffer[1024];
     spa_pod_builder Builder = SPA_POD_BUILDER_INIT(Buffer, sizeof(Buffer));
 
@@ -113,7 +175,7 @@ bool HardwareOutput::Start()
     int Result = pw_stream_connect(Stream, PW_DIRECTION_OUTPUT, PW_ID_ANY, Flags, Params, 1);
     if (Result < 0)
     {
-        fprintf(stderr, "[audiodockd] failed to connect hardware output stream: %s\n",
+        fprintf(stderr, "[audiobatd] failed to connect hardware output stream: %s\n",
                 spa_strerror(Result));
         return false;
     }
@@ -157,4 +219,4 @@ void HardwareOutput::HandleProcess()
     pw_stream_queue_buffer(Stream, PwBuffer);
 }
 
-} // namespace audiodock
+} // namespace audiobat

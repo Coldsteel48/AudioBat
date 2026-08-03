@@ -1,7 +1,7 @@
-// AudioDock
+// AudioBat
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioDock, dual-licensed under the GNU General
+// This file is part of AudioBat, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -13,26 +13,12 @@
 #include <cstring>
 
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
 
-namespace audiodock
+namespace audiobat
 {
-
-std::string DefaultControlSocketPath()
-{
-    if (const char* RuntimeDir = std::getenv("XDG_RUNTIME_DIR"))
-    {
-        std::string Dir = std::string(RuntimeDir) + "/audiodock";
-        mkdir(Dir.c_str(), 0700);
-        return Dir + "/control.sock";
-    }
-    std::string Dir = "/tmp/audiodock-" + std::to_string(getuid());
-    mkdir(Dir.c_str(), 0700);
-    return Dir + "/control.sock";
-}
 
 ControlServer::ControlServer(std::string InSocketPath) : SocketPath(std::move(InSocketPath))
 {
@@ -53,7 +39,7 @@ bool ControlServer::Start()
     ListenFd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (ListenFd < 0)
     {
-        fprintf(stderr, "[audiodockd] failed to create control socket: %s\n", strerror(errno));
+        fprintf(stderr, "[audiobatd] failed to create control socket: %s\n", strerror(errno));
         return false;
     }
 
@@ -61,7 +47,7 @@ bool ControlServer::Start()
     Addr.sun_family = AF_UNIX;
     if (SocketPath.size() >= sizeof(Addr.sun_path))
     {
-        fprintf(stderr, "[audiodockd] control socket path too long: %s\n", SocketPath.c_str());
+        fprintf(stderr, "[audiobatd] control socket path too long: %s\n", SocketPath.c_str());
         close(ListenFd);
         ListenFd = -1;
         return false;
@@ -72,7 +58,7 @@ bool ControlServer::Start()
 
     if (bind(ListenFd, reinterpret_cast<sockaddr*>(&Addr), sizeof(Addr)) < 0)
     {
-        fprintf(stderr, "[audiodockd] failed to bind control socket %s: %s\n", SocketPath.c_str(),
+        fprintf(stderr, "[audiobatd] failed to bind control socket %s: %s\n", SocketPath.c_str(),
                 strerror(errno));
         close(ListenFd);
         ListenFd = -1;
@@ -81,7 +67,7 @@ bool ControlServer::Start()
 
     if (listen(ListenFd, 4) < 0)
     {
-        fprintf(stderr, "[audiodockd] failed to listen on control socket: %s\n", strerror(errno));
+        fprintf(stderr, "[audiobatd] failed to listen on control socket: %s\n", strerror(errno));
         close(ListenFd);
         ListenFd = -1;
         return false;
@@ -90,7 +76,7 @@ bool ControlServer::Start()
     bRunning.store(true, std::memory_order_relaxed);
     AcceptThread = std::thread(&ControlServer::AcceptLoop, this);
 
-    fprintf(stderr, "[audiodockd] control socket listening at %s\n", SocketPath.c_str());
+    fprintf(stderr, "[audiobatd] control socket listening at %s\n", SocketPath.c_str());
     return true;
 }
 
@@ -163,7 +149,7 @@ void ControlServer::HandleClient(int ClientFd)
             }
             else if (Handler)
             {
-                Response = EncodeStatusResponse(Handler(*DecodedCommand));
+                Response = Handler(*DecodedCommand);
             }
             else
             {
@@ -178,4 +164,4 @@ void ControlServer::HandleClient(int ClientFd)
     close(ClientFd);
 }
 
-} // namespace audiodock
+} // namespace audiobat

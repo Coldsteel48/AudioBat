@@ -4,3 +4,4 @@ compile_commands.json
 *.a
 *.so
 .cache/
+imgui.ini

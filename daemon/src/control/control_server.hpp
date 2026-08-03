@@ -1,7 +1,7 @@
-// AudioDock
+// AudioBat
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioDock, dual-licensed under the GNU General
+// This file is part of AudioBat, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -14,18 +14,22 @@
 #include <thread>
 #include <vector>
 
-#include "audiodock/protocol.hpp"
+#include "audiobat/protocol.hpp"
 
-namespace audiodock
+namespace audiobat
 {
 
 // Unix domain socket server for the daemon's control protocol (see
-// audiodock/protocol.hpp for the wire format). Accepts multiple concurrent
+// audiobat/protocol.hpp for the wire format). Accepts multiple concurrent
 // clients (GUI, CLI tools), each on its own thread.
 class ControlServer
 {
 public:
-    using CommandHandler = std::function<Status(const Command&)>;
+    // Returns the fully encoded response message (header + payload) ready
+    // to write to the socket; the handler picks the response opcode
+    // (StatusResponse, DeviceListResponse, ...) so ControlServer itself
+    // stays agnostic to what any given command returns.
+    using CommandHandler = std::function<std::vector<uint8_t>(const Command&)>;
 
     explicit ControlServer(std::string InSocketPath);
     ~ControlServer();
@@ -53,8 +57,4 @@ private:
     CommandHandler Handler;
 };
 
-// Resolves the default control socket path: $XDG_RUNTIME_DIR/audiodock/control.sock,
-// falling back to /tmp/audiodock-<uid>/control.sock if XDG_RUNTIME_DIR isn't set.
-std::string DefaultControlSocketPath();
-
-} // namespace audiodock
+} // namespace audiobat

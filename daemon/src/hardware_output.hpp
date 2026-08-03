@@ -1,7 +1,7 @@
-// AudioDock
+// AudioBat
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioDock, dual-licensed under the GNU General
+// This file is part of AudioBat, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -15,13 +15,13 @@
 struct pw_stream;
 struct pw_loop;
 
-namespace audiodock
+namespace audiobat
 {
 
 // Wraps a PipeWire playback stream that sends the final processed stereo
 // mix out to a specific real hardware sink, pinned by PipeWire node name
 // rather than "whatever is currently the default sink". This is what makes
-// it safe to set the AudioDock virtual sink as the system default: without
+// it safe to set the AudioBat virtual sink as the system default: without
 // a pinned target, the output stream would resolve "default" to the
 // virtual sink itself and feed back into the capture side.
 class HardwareOutput
@@ -53,14 +53,41 @@ public:
     // TargetNodeName specifically. Returns false on failure.
     bool Start();
 
+    // Retargets an already-started stream to a different real hardware
+    // sink live: disconnects, updates target.object, and reconnects with
+    // the same format parameters Start() used - without recreating the
+    // pw_stream object itself, so the realtime process callback wiring
+    // stays intact. Returns false if the reconnect failed (the stream is
+    // left disconnected in that case, same as a failed Start()).
+    //
+    // Safe to call from any thread: the actual pw_stream_* calls are only
+    // safe on the PipeWire loop thread, so this hops over via
+    // pw_loop_invoke (blocking) rather than touching Stream directly -
+    // callers are typically a ControlServer client thread, not the loop
+    // thread that owns Stream.
+    bool SetTargetNode(std::string NewTargetNodeName);
+
+    const std::string& GetTargetNodeName() const
+    {
+        return TargetNodeName;
+    }
+
     // PipeWire callback trampoline target; not for external use.
     void HandleProcess();
 
 private:
+    // Builds format params and calls pw_stream_connect(); shared by Start()
+    // and SetTargetNode() since both end with the same negotiation step.
+    bool ConnectStream();
+
+    // Runs on the PipeWire loop thread (invoked via pw_loop_invoke from
+    // SetTargetNode()): disconnects, retargets, and reconnects Stream.
+    bool ReconnectOnLoopThread();
+
     pw_loop* Loop;
     pw_stream* Stream = nullptr;
     FillCallback Callback;
     std::string TargetNodeName;
 };
 
-} // namespace audiodock
+} // namespace audiobat

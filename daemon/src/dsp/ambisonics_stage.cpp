@@ -1,18 +1,16 @@
-// AudioDock
+// AudioBat
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioDock, dual-licensed under the GNU General
+// This file is part of AudioBat, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
 
 #include "ambisonics_stage.hpp"
 
-#include <cmath>
 #include <cstring>
-#include <numbers>
 
-namespace audiodock
+namespace audiobat
 {
 
 namespace
@@ -23,13 +21,10 @@ namespace
 // portably constexpr in C++20, and the value is fixed at compile time.
 constexpr float OneOverSqrtTwo = 0.70710678f;
 
-constexpr float DegToRad = std::numbers::pi_v<float> / 180.0f;
-
 // Virtual stereo decode speakers sit at +-45 deg, trading some front/back
 // separation (carried by the field's X component) for more perceived
 // left/right width versus a narrower +-30 deg stereo triangle. First
-// thing worth tuning once there's real listening feedback, and a natural
-// spot to swap in HRTF-based binaural decode later.
+// thing worth tuning once there's real listening feedback.
 //
 // cos(45 deg) == sin(45 deg) == 1/sqrt(2); precomputed as literals for the
 // same reason as OneOverSqrtTwo above. Since cos is even and sin is odd,
@@ -86,29 +81,6 @@ enum SevenOneChannel : uint32_t
 
 } // namespace
 
-AmbisonicsStage::AmbisonicsStage()
-{
-    // Default ITU-ish 7.1 speaker layout; all repositionable live via
-    // SetSpeakerAzimuth. 0 = front, positive = left, negative = right.
-    SpeakerAzimuthDegrees[SpeakerFL].store(30.0f, std::memory_order_relaxed);
-    SpeakerAzimuthDegrees[SpeakerFR].store(-30.0f, std::memory_order_relaxed);
-    SpeakerAzimuthDegrees[SpeakerFC].store(0.0f, std::memory_order_relaxed);
-    SpeakerAzimuthDegrees[SpeakerRL].store(135.0f, std::memory_order_relaxed);
-    SpeakerAzimuthDegrees[SpeakerRR].store(-135.0f, std::memory_order_relaxed);
-    SpeakerAzimuthDegrees[SpeakerSL].store(90.0f, std::memory_order_relaxed);
-    SpeakerAzimuthDegrees[SpeakerSR].store(-90.0f, std::memory_order_relaxed);
-}
-
-void AmbisonicsStage::SetSpeakerAzimuth(SpeakerChannel Speaker, float AzimuthDegrees)
-{
-    SpeakerAzimuthDegrees[Speaker].store(AzimuthDegrees, std::memory_order_relaxed);
-}
-
-float AmbisonicsStage::GetSpeakerAzimuth(SpeakerChannel Speaker) const
-{
-    return SpeakerAzimuthDegrees[Speaker].load(std::memory_order_relaxed);
-}
-
 void AmbisonicsStage::Process(const float* Input, uint32_t InputChannels,
                                float* Output, uint32_t OutputChannels,
                                uint32_t Frames)
@@ -121,46 +93,23 @@ void AmbisonicsStage::Process(const float* Input, uint32_t InputChannels,
         return;
     }
 
-    if (!bThreeDEnabled.load(std::memory_order_relaxed))
-    {
-        // "3D off" is a genuinely different signal path, not a no-op:
-        // falls back to PassthroughStage's static downmix.
-        FallbackStage.Process(Input, InputChannels, Output, OutputChannels, Frames);
-        return;
-    }
-
     // Snapshot live speaker positions once per block, not per sample -
     // they only change from control commands, never at audio rate.
-    float SourceCos[SpeakerCount];
-    float SourceSin[SpeakerCount];
-    for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
-    {
-        const float AzimuthRadians =
-            SpeakerAzimuthDegrees[Speaker].load(std::memory_order_relaxed) * DegToRad;
-        SourceCos[Speaker] = std::cos(AzimuthRadians);
-        SourceSin[Speaker] = std::sin(AzimuthRadians);
-    }
+    const SpeakerLayout::Directions Dirs = Layout.SnapshotDirections();
 
     for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
     {
         const float* InFrame = Input + FrameIndex * InputChannels;
         float* OutFrame = Output + FrameIndex * OutputChannels;
 
-        const float Sources[SpeakerCount] = {
+        const float Sources[SpeakerLayout::SpeakerCount] = {
             InFrame[FL], InFrame[FR], InFrame[FC], InFrame[RL], InFrame[RR], InFrame[SL], InFrame[SR],
         };
 
         // Encode: sum all 7 point sources into one first-order B-format
         // field (W = omnidirectional, X = front/back, Y = left/right).
-        float FieldW = 0.0f;
-        float FieldX = 0.0f;
-        float FieldY = 0.0f;
-        for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
-        {
-            FieldW += Sources[Speaker] * OneOverSqrtTwo;
-            FieldX += Sources[Speaker] * SourceCos[Speaker];
-            FieldY += Sources[Speaker] * SourceSin[Speaker];
-        }
+        float FieldW, FieldX, FieldY;
+        SpeakerLayout::Encode(Sources, Dirs, FieldW, FieldX, FieldY);
 
         // Decode: sample the field at two virtual speaker directions,
         // +-DecodeAzimuthDegrees. cos is even and sin is odd, so the
@@ -176,4 +125,4 @@ void AmbisonicsStage::Process(const float* Input, uint32_t InputChannels,
     }
 }
 
-} // namespace audiodock
+} // namespace audiobat
