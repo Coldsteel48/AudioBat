@@ -1,0 +1,172 @@
+// AudioBat
+// Copyright (C) 2026 Roman Levin (Coldsteel48)
+//
+// This file is part of AudioBat, dual-licensed under the GNU General
+// Public License v3.0 (see LICENSE) or a separate commercial license
+// (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
+// terms of the Contributor License Agreement (see CLA.md).
+
+#include "settings_store.hpp"
+
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
+#include <unordered_map>
+
+#include <sys/stat.h>
+
+namespace audiobat
+{
+
+namespace
+{
+
+// $XDG_CONFIG_HOME/audiobat, falling back to ~/.config/audiobat per the
+// XDG base directory spec - unlike the control socket (XDG_RUNTIME_DIR,
+// typically tmpfs), settings need to survive a reboot.
+std::string DefaultSettingsPath()
+{
+    std::string ConfigDir;
+    if (const char* XdgConfigHome = std::getenv("XDG_CONFIG_HOME"); XdgConfigHome && *XdgConfigHome)
+    {
+        ConfigDir = XdgConfigHome;
+    }
+    else if (const char* Home = std::getenv("HOME"); Home && *Home)
+    {
+        ConfigDir = std::string(Home) + "/.config";
+    }
+    else
+    {
+        ConfigDir = "/tmp"; // last resort; matches DefaultControlSocketPath's own /tmp fallback
+    }
+    ConfigDir += "/audiobat";
+    mkdir(ConfigDir.c_str(), 0700);
+    return ConfigDir + "/settings.conf";
+}
+
+std::string SpeakerKey(size_t Index, const char* Field)
+{
+    return "speaker." + std::to_string(Index) + "." + Field;
+}
+
+} // namespace
+
+SettingsStore::SettingsStore() : SettingsPath(DefaultSettingsPath())
+{
+}
+
+std::optional<PersistedSettings> SettingsStore::Load() const
+{
+    std::ifstream File(SettingsPath);
+    if (!File.is_open())
+    {
+        return std::nullopt;
+    }
+
+    // Simple `key=value` lines, one per field - deliberately not JSON: the
+    // daemon has no JSON dependency, and a settings file this small (a
+    // couple dozen scalar fields) doesn't need one.
+    std::unordered_map<std::string, std::string> Fields;
+    std::string Line;
+    while (std::getline(File, Line))
+    {
+        const size_t Eq = Line.find('=');
+        if (Eq == std::string::npos)
+        {
+            continue;
+        }
+        Fields.emplace(Line.substr(0, Eq), Line.substr(Eq + 1));
+    }
+
+    auto GetString = [&](const std::string& Key, const std::string& Default) -> std::string
+    {
+        const auto It = Fields.find(Key);
+        return It != Fields.end() ? It->second : Default;
+    };
+    auto GetLong = [&](const std::string& Key, long Default) -> long
+    {
+        const auto It = Fields.find(Key);
+        if (It == Fields.end())
+        {
+            return Default;
+        }
+        try
+        {
+            return std::stol(It->second);
+        }
+        catch (...)
+        {
+            return Default;
+        }
+    };
+    auto GetFloat = [&](const std::string& Key, float Default) -> float
+    {
+        const auto It = Fields.find(Key);
+        if (It == Fields.end())
+        {
+            return Default;
+        }
+        try
+        {
+            return std::stof(It->second);
+        }
+        catch (...)
+        {
+            return Default;
+        }
+    };
+    auto GetBool = [&](const std::string& Key, bool Default) -> bool
+    {
+        const auto It = Fields.find(Key);
+        return It != Fields.end() ? It->second == "1" : Default;
+    };
+
+    PersistedSettings Result;
+    Result.Mode = static_cast<SpatialMode>(GetLong("mode", static_cast<long>(Result.Mode)));
+    Result.bNearFieldEnabled = GetBool("near_field", Result.bNearFieldEnabled);
+    Result.OutputDeviceName = GetString("output_device", Result.OutputDeviceName);
+    Result.ActiveHrtfDisplayName = GetString("hrtf_display_name", Result.ActiveHrtfDisplayName);
+    for (size_t i = 0; i < SpeakerCount; ++i)
+    {
+        Result.SpeakerAzimuthDegrees[i] = GetFloat(SpeakerKey(i, "azimuth"), Result.SpeakerAzimuthDegrees[i]);
+        Result.SpeakerDistanceMeters[i] = GetFloat(SpeakerKey(i, "distance"), Result.SpeakerDistanceMeters[i]);
+        Result.SpeakerMuted[i] = GetBool(SpeakerKey(i, "muted"), Result.SpeakerMuted[i]);
+    }
+    return Result;
+}
+
+void SettingsStore::Save(const PersistedSettings& InSettings) const
+{
+    std::ostringstream Out;
+    Out << "mode=" << static_cast<int>(InSettings.Mode) << "\n";
+    Out << "near_field=" << (InSettings.bNearFieldEnabled ? 1 : 0) << "\n";
+    Out << "output_device=" << InSettings.OutputDeviceName << "\n";
+    Out << "hrtf_display_name=" << InSettings.ActiveHrtfDisplayName << "\n";
+    for (size_t i = 0; i < SpeakerCount; ++i)
+    {
+        Out << SpeakerKey(i, "azimuth") << "=" << InSettings.SpeakerAzimuthDegrees[i] << "\n";
+        Out << SpeakerKey(i, "distance") << "=" << InSettings.SpeakerDistanceMeters[i] << "\n";
+        Out << SpeakerKey(i, "muted") << "=" << (InSettings.SpeakerMuted[i] ? 1 : 0) << "\n";
+    }
+
+    // Write-to-temp-then-rename: rename() is atomic within the same
+    // directory, so a crash or power loss mid-write leaves either the old
+    // settings file or the new one intact, never a half-written one.
+    const std::string TempPath = SettingsPath + ".tmp";
+    std::ofstream File(TempPath, std::ios::trunc);
+    if (!File.is_open())
+    {
+        fprintf(stderr, "[audiobatd] failed to write settings to %s\n", TempPath.c_str());
+        return;
+    }
+    File << Out.str();
+    File.close();
+
+    if (std::rename(TempPath.c_str(), SettingsPath.c_str()) != 0)
+    {
+        fprintf(stderr, "[audiobatd] failed to save settings to %s\n", SettingsPath.c_str());
+    }
+}
+
+} // namespace audiobat

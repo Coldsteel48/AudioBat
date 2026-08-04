@@ -162,6 +162,16 @@ std::optional<Status> ControlClient::SetSpeakerAzimuth(uint8_t SpeakerIndex, flo
     return SendStatusRequest(EncodeSetSpeakerAzimuthRequest(SpeakerIndex, AzimuthDegrees));
 }
 
+std::optional<Status> ControlClient::SetSpeakerDistance(uint8_t SpeakerIndex, float DistanceMeters)
+{
+    return SendStatusRequest(EncodeSetSpeakerDistanceRequest(SpeakerIndex, DistanceMeters));
+}
+
+std::optional<Status> ControlClient::SetNearFieldEnabled(bool bEnabled)
+{
+    return SendStatusRequest(EncodeSetNearFieldEnabledRequest(bEnabled));
+}
+
 std::optional<Status> ControlClient::ResetSpeakerPositions()
 {
     return SendStatusRequest(EncodeResetSpeakerPositionsRequest());

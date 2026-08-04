@@ -41,7 +41,14 @@ private:
     float ReconnectTimerSeconds = 0.0f;
     float StatusPollTimerSeconds = 0.0f;
     float DevicePollTimerSeconds = 0.0f;
-    float AzimuthSendTimerSeconds = 0.0f;
+    float PositionSendTimerSeconds = 0.0f; // throttles azimuth+distance sends together while dragging
+    // True when a locally-dragged azimuth/distance change hasn't been sent
+    // to the daemon yet (throttled out by PositionSendTimerSeconds). Flushed
+    // as soon as the drag ends so the next status poll can't overwrite the
+    // handle with a stale server value - see the drag-release send in
+    // DrawUI().
+    bool bPositionSendPending = false;
+    int PendingPositionIndex = -1;
 };
 
 } // namespace audiobat::gui

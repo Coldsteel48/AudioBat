@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <vector>
 
 namespace audiobat
@@ -17,10 +20,9 @@ namespace audiobat
 // rate, plus each ear's propagation delay (some sources, e.g. measured
 // SOFA data, report delay separately from the FIR taps; others bake it
 // into the taps themselves and leave these at 0 - see BuildDelayedFilter
-// in binaural_stage.cpp). Shared between every HRTF source BinauralStage
-// can use (HrtfLoader's measured SOFA data, ComputeSphericalHeadFilter's
-// synthetic model) so they're interchangeable from BinauralStage's point
-// of view.
+// below). Shared between every HRTF source BinauralStage can use
+// (HrtfLoader's measured SOFA data, ComputeSphericalHeadFilter's synthetic
+// model) so they're interchangeable from BinauralStage's point of view.
 struct HrtfFilter
 {
     std::vector<float> Left;
@@ -28,5 +30,23 @@ struct HrtfFilter
     float DelayLeftSamples = 0.0f;
     float DelayRightSamples = 0.0f;
 };
+
+// Prepends IntDelay zero samples to Taps, approximating a reported
+// fractional-sample delay (e.g. from libmysofa) with an integer-sample
+// delay. A future refinement could use a fractional (all-pass) delay for
+// sub-sample accuracy. Named distinctly from binaural_stage.cpp's own
+// private, identically-shaped BuildDelayedFilter (not this one, and not
+// renamed to match) - that original (pre-near-field) signal path is meant
+// to stay byte-for-byte what shipped before this file existed, see
+// docs/near-field-distance-plan.md ("additive, not replaced"); giving
+// this one a distinct name avoids an unqualified-lookup ambiguity between
+// the two in translation units that end up seeing both.
+inline std::vector<float> BuildDelayedHrtfFilter(const std::vector<float>& Taps, float DelaySamples)
+{
+    const uint32_t IntDelay = static_cast<uint32_t>(std::lround(std::max(0.0f, DelaySamples)));
+    std::vector<float> Delayed(Taps.size() + IntDelay, 0.0f);
+    std::copy(Taps.begin(), Taps.end(), Delayed.begin() + IntDelay);
+    return Delayed;
+}
 
 } // namespace audiobat

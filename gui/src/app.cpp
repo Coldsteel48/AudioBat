@@ -8,8 +8,8 @@
 
 #include "app.hpp"
 
-#include "azimuth_dial.hpp"
 #include "imgui.h"
+#include "position_dial.hpp"
 
 namespace audiobat::gui
 {
@@ -19,7 +19,7 @@ namespace
 constexpr float ReconnectIntervalSeconds = 1.0f;
 constexpr float StatusPollIntervalSeconds = 0.25f;
 constexpr float DevicePollIntervalSeconds = 2.0f; // hotplug doesn't need to feel instant
-constexpr float AzimuthSendIntervalSeconds = 0.03f; // ~33 Hz cap while dragging
+constexpr float PositionSendIntervalSeconds = 0.03f; // ~33 Hz cap while dragging
 } // namespace
 
 void App::Tick(float DeltaTimeSeconds)
@@ -220,7 +220,29 @@ void App::DrawUI()
     }
 
     ImGui::Spacing();
-    ImGui::TextUnformatted("Speaker positions (click a label to mute, Ctrl+click to solo)");
+    bool bNearFieldEnabled = LastStatus.bNearFieldEnabled;
+    if (ImGui::Checkbox("Near-field distance", &bNearFieldEnabled))
+    {
+        if (auto Result = Client.SetNearFieldEnabled(bNearFieldEnabled))
+        {
+            LastStatus = *Result;
+        }
+        else
+        {
+            bConnected = false;
+            ReconnectTimerSeconds = 0.0f;
+        }
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Off: speaker distance (drag radially on the dial below) has no effect - today's "
+                           "behavior.\nOn: closer speakers get louder in every mode, and Advanced (HRTF) mode "
+                           "additionally gets a real interaural-level-difference proximity effect.");
+    }
+
+    ImGui::Spacing();
+    ImGui::TextUnformatted(
+        "Speaker positions (drag: angle + distance; click a label to mute, Ctrl+click to solo)");
 
     // Sends one mute/unmute command and folds the response into LastStatus;
     // on failure, flags disconnected the same way every other request
@@ -239,22 +261,29 @@ void App::DrawUI()
         return false;
     };
 
-    int ChangedAzimuthIndex = -1;
-    int MuteToggledIndex = -1;
-    int SoloIndex = -1;
-    const bool bDialChanged =
-        DrawAzimuthDial("speaker_dial", LastStatus.SpeakerAzimuthDegrees, LastStatus.SpeakerMuted,
-                         &ChangedAzimuthIndex, &MuteToggledIndex, &SoloIndex, DpiScale);
-
-    if (bDialChanged)
+    // Sends the given speaker's current (locally-dragged) azimuth and
+    // distance and folds the response into LastStatus, the same
+    // fail-and-disconnect pattern as SetSpeakerMuted above.
+    auto SendSpeakerPosition = [&](uint8_t SpeakerIndex)
     {
-        AzimuthSendTimerSeconds -= ImGui::GetIO().DeltaTime;
-        if (AzimuthSendTimerSeconds <= 0.0f)
+        // Captured before the azimuth round-trip: that response's
+        // LastStatus assignment below overwrites SpeakerDistanceMeters
+        // with whatever the daemon had *before* this drag's distance is
+        // sent, so reading it fresh afterward would send the stale
+        // pre-drag distance right back to the daemon.
+        const float DistanceToSend = LastStatus.SpeakerDistanceMeters[SpeakerIndex];
+        if (auto Result = Client.SetSpeakerAzimuth(SpeakerIndex, LastStatus.SpeakerAzimuthDegrees[SpeakerIndex]))
         {
-            AzimuthSendTimerSeconds = AzimuthSendIntervalSeconds;
-            if (auto Result = Client.SetSpeakerAzimuth(
-                    static_cast<uint8_t>(ChangedAzimuthIndex),
-                    LastStatus.SpeakerAzimuthDegrees[ChangedAzimuthIndex]))
+            LastStatus = *Result;
+        }
+        else
+        {
+            bConnected = false;
+            ReconnectTimerSeconds = 0.0f;
+        }
+        if (bConnected)
+        {
+            if (auto Result = Client.SetSpeakerDistance(SpeakerIndex, DistanceToSend))
             {
                 LastStatus = *Result;
             }
@@ -264,10 +293,44 @@ void App::DrawUI()
                 ReconnectTimerSeconds = 0.0f;
             }
         }
+    };
+
+    int ChangedIndex = -1;
+    int MuteToggledIndex = -1;
+    int SoloIndex = -1;
+    const bool bDialChanged =
+        DrawPositionDial("speaker_dial", LastStatus.SpeakerAzimuthDegrees, LastStatus.SpeakerDistanceMeters,
+                          LastStatus.SpeakerMuted, &ChangedIndex, &MuteToggledIndex, &SoloIndex, DpiScale);
+
+    if (bDialChanged)
+    {
+        PendingPositionIndex = ChangedIndex;
+        PositionSendTimerSeconds -= ImGui::GetIO().DeltaTime;
+        if (PositionSendTimerSeconds <= 0.0f)
+        {
+            PositionSendTimerSeconds = PositionSendIntervalSeconds;
+            SendSpeakerPosition(static_cast<uint8_t>(ChangedIndex));
+            bPositionSendPending = false;
+        }
+        else
+        {
+            bPositionSendPending = true;
+        }
     }
     else
     {
-        AzimuthSendTimerSeconds = 0.0f;
+        PositionSendTimerSeconds = 0.0f;
+        // The drag just ended (or this is an unrelated frame). If the last
+        // dragged position was throttled out and never sent, flush it now -
+        // otherwise the handle sits at its final dragged spot only until the
+        // next status poll, which still has the last-sent (stale) value and
+        // snaps the handle back to it.
+        if (bPositionSendPending && PendingPositionIndex >= 0)
+        {
+            SendSpeakerPosition(static_cast<uint8_t>(PendingPositionIndex));
+            bPositionSendPending = false;
+        }
+        PendingPositionIndex = -1;
     }
 
     if (MuteToggledIndex >= 0)

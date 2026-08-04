@@ -13,6 +13,8 @@
 #include <cstdint>
 #include <numbers>
 
+#include "rigid_sphere_math.hpp"
+
 namespace audiobat
 {
 
@@ -20,11 +22,6 @@ namespace
 {
 
 constexpr float DegToRad = std::numbers::pi_v<float> / 180.0f;
-
-// Average adult head radius (m) and speed of sound in air (m/s) - the two
-// constants the Woodworth-Schlosberg ITD formula needs.
-constexpr float HeadRadiusMeters = 0.0875f;
-constexpr float SpeedOfSoundMetersPerSecond = 343.0f;
 
 // Short relative to measured HRIRs (which run into the hundreds of taps):
 // this model has no fine spectral detail to represent, just a single-pole
@@ -47,17 +44,13 @@ float Lerp(float A, float B, float T)
     return A + (B - A) * T;
 }
 
-// Generates a unity-DC-gain single-pole low-pass impulse response,
-// h[n] = (1-p)*p^n, scaled by Gain afterward.
+// Flat-gain-scaled version of the shared unity-DC-gain low-pass primitive.
 std::vector<float> BuildShelfFilter(float CutoffHz, float Gain, float SampleRate)
 {
-    const float Pole = std::exp(-2.0f * std::numbers::pi_v<float> * CutoffHz / SampleRate);
-    std::vector<float> Taps(TapCount);
-    float PolePower = 1.0f;
-    for (uint32_t n = 0; n < TapCount; ++n)
+    std::vector<float> Taps = BuildUnityGainLowpassIR(CutoffHz, SampleRate, TapCount);
+    for (float& Tap : Taps)
     {
-        Taps[n] = Gain * (1.0f - Pole) * PolePower;
-        PolePower *= Pole;
+        Tap *= Gain;
     }
     return Taps;
 }
@@ -66,24 +59,8 @@ std::vector<float> BuildShelfFilter(float CutoffHz, float Gain, float SampleRate
 
 HrtfFilter ComputeSphericalHeadFilter(float AzimuthDegrees, float /*ElevationDegrees*/, float SampleRate)
 {
-    // Normalize to (-180, 180] so the lateral-angle folding below is
-    // well-defined regardless of how the caller phrased the azimuth (this
-    // pipeline's virtual speakers run 0..315).
-    float Azimuth = std::fmod(AzimuthDegrees, 360.0f);
-    if (Azimuth > 180.0f)
-    {
-        Azimuth -= 360.0f;
-    }
-    else if (Azimuth <= -180.0f)
-    {
-        Azimuth += 360.0f;
-    }
-
-    // Lateral angle from the interaural axis: 0 at dead front/behind
-    // (equidistant to both ears, zero ITD), 90 at either side (max ITD).
-    // Folds AudioBat's 0=front/180=behind azimuth onto the classic
-    // Woodworth formula's 0=front/90=side term.
-    const float Alpha = 90.0f - std::fabs(90.0f - std::fabs(Azimuth));
+    const float Azimuth = NormalizeAzimuthDegrees(AzimuthDegrees);
+    const float Alpha = LateralAngleDegrees(Azimuth);
     const float AlphaRad = Alpha * DegToRad;
     const float AlphaFraction = Alpha / 90.0f; // 0 at front/behind, 1 at full lateral
 

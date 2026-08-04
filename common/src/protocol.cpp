@@ -153,6 +153,21 @@ std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8_t* Payload, ui
         }
         OutCommand.HrtfIndex = Payload[0];
         return OutCommand;
+    case Opcode::SetSpeakerDistance:
+        if (PayloadLength < 5 || Payload[0] >= SpeakerCount)
+        {
+            return std::nullopt;
+        }
+        OutCommand.SpeakerIndex = Payload[0];
+        OutCommand.DistanceMeters = ReadFloatBE(Payload + 1);
+        return OutCommand;
+    case Opcode::SetNearFieldEnabled:
+        if (PayloadLength < 1)
+        {
+            return std::nullopt;
+        }
+        OutCommand.bNearFieldEnabled = Payload[0] != 0;
+        return OutCommand;
     default:
         return std::nullopt;
     }
@@ -161,8 +176,9 @@ std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8_t* Payload, ui
 std::optional<Status> DecodeStatusResponse(const uint8_t* Payload, uint16_t PayloadLength)
 {
     // Layout: [mode:1][azimuths: 4*SpeakerCount][muted: SpeakerCount][noise:1][activeHrtfIndex:1]
-    //         [device: length-prefixed string]
-    const uint16_t FixedSize = static_cast<uint16_t>(1 + 4 * SpeakerCount + SpeakerCount + 1 + 1);
+    //         [distances: 4*SpeakerCount][nearFieldEnabled:1][device: length-prefixed string]
+    const uint16_t FixedSize =
+        static_cast<uint16_t>(1 + 4 * SpeakerCount + SpeakerCount + 1 + 1 + 4 * SpeakerCount + 1);
     if (PayloadLength < FixedSize || Payload[0] > static_cast<uint8_t>(SpatialMode::Advanced))
     {
         return std::nullopt;
@@ -180,6 +196,13 @@ std::optional<Status> DecodeStatusResponse(const uint8_t* Payload, uint16_t Payl
     }
     OutStatus.bTestNoiseEnabled = Payload[MutedOffset + SpeakerCount] != 0;
     OutStatus.ActiveHrtfIndex = Payload[MutedOffset + SpeakerCount + 1];
+
+    const size_t DistanceOffset = MutedOffset + SpeakerCount + 2;
+    for (size_t i = 0; i < SpeakerCount; ++i)
+    {
+        OutStatus.SpeakerDistanceMeters[i] = ReadFloatBE(Payload + DistanceOffset + 4 * i);
+    }
+    OutStatus.bNearFieldEnabled = Payload[DistanceOffset + 4 * SpeakerCount] != 0;
 
     size_t Offset = FixedSize;
     if (!ReadString(Payload, PayloadLength, Offset, OutStatus.OutputDeviceName))
@@ -259,6 +282,11 @@ std::vector<uint8_t> EncodeStatusResponse(const Status& InStatus)
     }
     Payload.push_back(InStatus.bTestNoiseEnabled ? 1 : 0);
     Payload.push_back(InStatus.ActiveHrtfIndex);
+    for (float Distance : InStatus.SpeakerDistanceMeters)
+    {
+        AppendFloatBE(Payload, Distance);
+    }
+    Payload.push_back(InStatus.bNearFieldEnabled ? 1 : 0);
     AppendString(Payload, InStatus.OutputDeviceName);
 
     std::vector<uint8_t> Out;
@@ -417,6 +445,25 @@ std::vector<uint8_t> EncodeSetHrtfFileRequest(uint8_t HrtfIndex)
     Out.reserve(HeaderSize + 1);
     AppendHeader(Out, Opcode::SetHrtfFile, 1);
     Out.push_back(HrtfIndex);
+    return Out;
+}
+
+std::vector<uint8_t> EncodeSetSpeakerDistanceRequest(uint8_t SpeakerIndex, float DistanceMeters)
+{
+    std::vector<uint8_t> Out;
+    Out.reserve(HeaderSize + 5);
+    AppendHeader(Out, Opcode::SetSpeakerDistance, 5);
+    Out.push_back(SpeakerIndex);
+    AppendFloatBE(Out, DistanceMeters);
+    return Out;
+}
+
+std::vector<uint8_t> EncodeSetNearFieldEnabledRequest(bool bEnabled)
+{
+    std::vector<uint8_t> Out;
+    Out.reserve(HeaderSize + 1);
+    AppendHeader(Out, Opcode::SetNearFieldEnabled, 1);
+    Out.push_back(bEnabled ? 1 : 0);
     return Out;
 }
 

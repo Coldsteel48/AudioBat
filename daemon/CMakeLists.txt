@@ -77,13 +77,18 @@ add_executable(audiobatd
     src/virtual_sink.cpp
     src/hardware_output.cpp
     src/device_registry.cpp
+    src/single_instance_lock.cpp
+    src/settings_store.cpp
     src/dsp/passthrough_stage.cpp
     src/dsp/speaker_layout.cpp
     src/dsp/ambisonics_stage.cpp
     src/dsp/hrtf_loader.cpp
     src/dsp/synthetic_hrtf.cpp
+    src/dsp/near_field_filter.cpp
+    src/dsp/hrtf_gain_normalization.cpp
     src/dsp/partitioned_convolver.cpp
     src/dsp/binaural_stage.cpp
+    src/dsp/binaural_voice.cpp
     src/dsp/hrtf_deck.cpp
     src/control/control_server.cpp
 )

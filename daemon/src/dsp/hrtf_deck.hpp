@@ -8,40 +8,33 @@
 
 #pragma once
 
-#include <array>
 #include <atomic>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "binaural_stage.hpp"
+#include "crossfading_slot.hpp"
 #include "dsp_stage.hpp"
 #include "speaker_layout.hpp"
 
 namespace audiobat
 {
 
-// Wraps two BinauralStages so switching the active HRTF source (SOFA file
-// or synthetic model) never restarts the daemon and never clicks: a
-// pending switch is built off the realtime thread, then Process()
-// crossfades into it over a fixed window once published.
+// Wraps two BinauralStages (via CrossfadingSlot) so switching the active
+// HRTF source (SOFA file or synthetic model) never restarts the daemon
+// and never clicks: a pending switch is built off the realtime thread,
+// then Process() crossfades into it over a fixed window once published.
 //
 // Thread model: SwitchTo()/CollectGarbage() run on one of the daemon's
 // control-client worker threads (ControlServer::HandleClient spawns a
 // plain detached thread per connection - never the PipeWire main loop or
-// the audio callback). Process() runs on the realtime audio thread. The
-// two sides only ever communicate through the Pending/Trash atomics
-// below; Process() itself never allocates, blocks, or frees memory.
-//
-// Overlapping switches don't need to be rejected: if a second SwitchTo()
-// publishes to Pending before Process() has consumed the first one, the
-// second simply wins (latest request published last is what gets read) -
-// the first stage's shared_ptr is dropped on the calling control thread
-// when Pending is overwritten, never on the audio thread.
+// the audio callback). Process() runs on the realtime audio thread - see
+// CrossfadingSlot for how the two sides stay safely decoupled.
 class HrtfDeck final : public DspStage
 {
 public:
-    HrtfDeck(const SpeakerLayout& InLayout, HrtfSourceKind Kind, const std::string& SofaPath, float SampleRate);
+    HrtfDeck(const SpeakerLayout& InLayout, HrtfSourceKind Kind, const std::string& SofaPath, float SampleRate,
+             bool bInitialNearFieldEnabled);
 
     void Process(const float* Input, uint32_t InputChannels,
                  float* Output, uint32_t OutputChannels,
@@ -51,39 +44,34 @@ public:
     // (SOFA parse + convolver setup - same "call once, not from
     // Process()" cost BinauralStage's own constructor already carries),
     // then publishes it for Process() to crossfade into on its next call.
+    // The new stage starts in whatever near-field state was most recently
+    // set via SetNearFieldEnabled, so switching HRTF source doesn't reset
+    // that toggle.
     void SwitchTo(HrtfSourceKind Kind, const std::string& SofaPath);
 
-    // Drops any stage(s) a completed crossfade faded out of. Safe to call
-    // frequently; a no-op when there's nothing to collect. Must not be
-    // called from the audio thread - the drop itself may deallocate.
-    // AudioEngine piggybacks this on every HandleControlCommand call
-    // (i.e. every GUI status poll), so no dedicated timer is needed.
+    // Pass-throughs to whichever BinauralStage is currently live - see
+    // BinauralStage's own doc comments for what each does. Callable from
+    // any thread, same as their BinauralStage counterparts.
+    void SetNearFieldEnabled(bool bEnabled);
+    void RebuildVoiceForSpeaker(SpeakerLayout::SpeakerChannel Speaker, float AzimuthDegrees,
+                                 float DistanceMeters);
+
+    // Drops any stage(s) a completed crossfade faded out of, and forwards
+    // into the live stage to do the same for its own per-voice crossfades.
+    // Safe to call frequently; a no-op when there's nothing to collect.
+    // Must not be called from the audio thread - the drop itself may
+    // deallocate. AudioEngine piggybacks this on every HandleControlCommand
+    // call (i.e. every GUI status poll), so no dedicated timer is needed.
     void CollectGarbage();
 
 private:
     const SpeakerLayout& Layout;
     float SampleRate;
+    std::atomic<bool> bNearFieldEnabled{false};
 
-    // RT-thread-owned: only Process() ever reads or writes these.
-    std::shared_ptr<BinauralStage> Live;
-    std::shared_ptr<BinauralStage> FadingOut;
-    uint32_t FadeFramesRemaining = 0;
-    uint32_t TrashSlot = 0;
-    const uint32_t CrossfadeFrames; // ~50ms of frames at construction SampleRate
+    static constexpr uint32_t ChannelsPerFrame = 2; // stereo output
 
-    std::atomic<std::shared_ptr<BinauralStage>> Pending{nullptr};
-
-    // Two slots rather than one: if a second crossfade completes before
-    // CollectGarbage() has drained the first, the second still lands in
-    // an empty slot instead of forcing an overwrite that would deallocate
-    // the first slot's contents right there on the audio thread.
-    std::array<std::atomic<std::shared_ptr<BinauralStage>>, 2> Trash{};
-
-    // Crossfade scratch, sized once against MaxProcessFrames so Process()
-    // never allocates - same pattern as BinauralStage's own scratch
-    // buffers.
-    std::vector<float> ScratchOld;
-    std::vector<float> ScratchNew;
+    CrossfadingSlot<BinauralStage> Slot;
 };
 
 } // namespace audiobat
