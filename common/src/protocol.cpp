@@ -144,6 +144,15 @@ std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8_t* Payload, ui
         }
         OutCommand.bTestNoiseEnabled = Payload[0] != 0;
         return OutCommand;
+    case Opcode::GetHrtfCatalog:
+        return OutCommand;
+    case Opcode::SetHrtfFile:
+        if (PayloadLength < 1)
+        {
+            return std::nullopt;
+        }
+        OutCommand.HrtfIndex = Payload[0];
+        return OutCommand;
     default:
         return std::nullopt;
     }
@@ -151,8 +160,9 @@ std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8_t* Payload, ui
 
 std::optional<Status> DecodeStatusResponse(const uint8_t* Payload, uint16_t PayloadLength)
 {
-    // Layout: [mode:1][azimuths: 4*SpeakerCount][muted: SpeakerCount][noise:1][device: length-prefixed string]
-    const uint16_t FixedSize = static_cast<uint16_t>(1 + 4 * SpeakerCount + SpeakerCount + 1);
+    // Layout: [mode:1][azimuths: 4*SpeakerCount][muted: SpeakerCount][noise:1][activeHrtfIndex:1]
+    //         [device: length-prefixed string]
+    const uint16_t FixedSize = static_cast<uint16_t>(1 + 4 * SpeakerCount + SpeakerCount + 1 + 1);
     if (PayloadLength < FixedSize || Payload[0] > static_cast<uint8_t>(SpatialMode::Advanced))
     {
         return std::nullopt;
@@ -169,6 +179,7 @@ std::optional<Status> DecodeStatusResponse(const uint8_t* Payload, uint16_t Payl
         OutStatus.SpeakerMuted[i] = Payload[MutedOffset + i] != 0;
     }
     OutStatus.bTestNoiseEnabled = Payload[MutedOffset + SpeakerCount] != 0;
+    OutStatus.ActiveHrtfIndex = Payload[MutedOffset + SpeakerCount + 1];
 
     size_t Offset = FixedSize;
     if (!ReadString(Payload, PayloadLength, Offset, OutStatus.OutputDeviceName))
@@ -209,6 +220,31 @@ std::optional<std::vector<AudioDeviceInfo>> DecodeDeviceListResponse(const uint8
     return Devices;
 }
 
+std::optional<std::vector<std::string>> DecodeHrtfCatalogResponse(const uint8_t* Payload,
+                                                                    uint16_t PayloadLength)
+{
+    size_t Offset = 0;
+    if (Offset + 2 > PayloadLength)
+    {
+        return std::nullopt;
+    }
+    const uint16_t Count = static_cast<uint16_t>((Payload[Offset] << 8) | Payload[Offset + 1]);
+    Offset += 2;
+
+    std::vector<std::string> DisplayNames;
+    DisplayNames.reserve(Count);
+    for (uint16_t i = 0; i < Count; ++i)
+    {
+        std::string Name;
+        if (!ReadString(Payload, PayloadLength, Offset, Name))
+        {
+            return std::nullopt;
+        }
+        DisplayNames.push_back(std::move(Name));
+    }
+    return DisplayNames;
+}
+
 std::vector<uint8_t> EncodeStatusResponse(const Status& InStatus)
 {
     std::vector<uint8_t> Payload;
@@ -222,6 +258,7 @@ std::vector<uint8_t> EncodeStatusResponse(const Status& InStatus)
         Payload.push_back(bMuted ? 1 : 0);
     }
     Payload.push_back(InStatus.bTestNoiseEnabled ? 1 : 0);
+    Payload.push_back(InStatus.ActiveHrtfIndex);
     AppendString(Payload, InStatus.OutputDeviceName);
 
     std::vector<uint8_t> Out;
@@ -266,6 +303,34 @@ std::vector<uint8_t> EncodeDeviceListResponse(const std::vector<AudioDeviceInfo>
     std::vector<uint8_t> Out;
     Out.reserve(HeaderSize + Payload.size());
     AppendHeader(Out, Opcode::DeviceListResponse, static_cast<uint16_t>(Payload.size()));
+    Out.insert(Out.end(), Payload.begin(), Payload.end());
+    return Out;
+}
+
+std::vector<uint8_t> EncodeHrtfCatalogResponse(const std::vector<std::string>& DisplayNames)
+{
+    std::vector<uint8_t> Payload;
+    Payload.push_back(0); // count placeholder, patched below once the final count is known
+    Payload.push_back(0);
+
+    uint16_t Count = 0;
+    for (const auto& Name : DisplayNames)
+    {
+        std::vector<uint8_t> Entry;
+        AppendString(Entry, Name);
+        if (Payload.size() + Entry.size() > MaxPayloadSize)
+        {
+            break; // stop before exceeding the payload cap, never mid-entry
+        }
+        Payload.insert(Payload.end(), Entry.begin(), Entry.end());
+        ++Count;
+    }
+    Payload[0] = static_cast<uint8_t>((Count >> 8) & 0xFF);
+    Payload[1] = static_cast<uint8_t>(Count & 0xFF);
+
+    std::vector<uint8_t> Out;
+    Out.reserve(HeaderSize + Payload.size());
+    AppendHeader(Out, Opcode::HrtfCatalogResponse, static_cast<uint16_t>(Payload.size()));
     Out.insert(Out.end(), Payload.begin(), Payload.end());
     return Out;
 }
@@ -336,6 +401,22 @@ std::vector<uint8_t> EncodeSetTestNoiseRequest(bool bEnabled)
     Out.reserve(HeaderSize + 1);
     AppendHeader(Out, Opcode::SetTestNoise, 1);
     Out.push_back(bEnabled ? 1 : 0);
+    return Out;
+}
+
+std::vector<uint8_t> EncodeGetHrtfCatalogRequest()
+{
+    std::vector<uint8_t> Out;
+    AppendHeader(Out, Opcode::GetHrtfCatalog, 0);
+    return Out;
+}
+
+std::vector<uint8_t> EncodeSetHrtfFileRequest(uint8_t HrtfIndex)
+{
+    std::vector<uint8_t> Out;
+    Out.reserve(HeaderSize + 1);
+    AppendHeader(Out, Opcode::SetHrtfFile, 1);
+    Out.push_back(HrtfIndex);
     return Out;
 }
 

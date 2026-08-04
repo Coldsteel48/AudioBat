@@ -200,4 +200,27 @@ std::optional<std::vector<AudioDeviceInfo>> ControlClient::RequestDevices()
     return DecodedDevices;
 }
 
+std::optional<std::vector<std::string>> ControlClient::RequestHrtfCatalog()
+{
+    auto Response = SendRawRequest(EncodeGetHrtfCatalogRequest());
+    if (!Response || Response->MessageOpcode != Opcode::HrtfCatalogResponse)
+    {
+        return std::nullopt;
+    }
+
+    auto DecodedCatalog = DecodeHrtfCatalogResponse(Response->Payload.data(),
+                                                      static_cast<uint16_t>(Response->Payload.size()));
+    if (!DecodedCatalog)
+    {
+        Disconnect();
+        return std::nullopt;
+    }
+    return DecodedCatalog;
+}
+
+std::optional<Status> ControlClient::SetHrtfFile(uint8_t HrtfIndex)
+{
+    return SendStatusRequest(EncodeSetHrtfFileRequest(HrtfIndex));
+}
+
 } // namespace audiobat::gui

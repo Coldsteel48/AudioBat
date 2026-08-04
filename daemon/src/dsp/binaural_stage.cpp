@@ -14,6 +14,8 @@
 #include <cstring>
 #include <numbers>
 
+#include "synthetic_hrtf.hpp"
+
 namespace audiobat
 {
 
@@ -31,6 +33,13 @@ constexpr float LfeGain = 0.5f; // matches AmbisonicsStage/PassthroughStage
 // has enough spatial resolution that no extra hand-tuned width boost is
 // needed here.
 constexpr float VirtualSpeakerGain = 2.0f / static_cast<float>(BinauralStage::VirtualSpeakerCount);
+
+// Reference peak HRIR tap magnitude every SofaFile source gets normalized
+// to (see the normalization pass in the constructor) - chosen to closely
+// match the bundled default.sofa's own natural peak (~0.68), so its
+// output level is essentially unchanged from before this normalization
+// existed.
+constexpr float TargetPeakTap = 0.7f;
 
 // Raw 7.1 input channel order, matching the layout VirtualSink captures
 // (same as AmbisonicsStage/PassthroughStage).
@@ -61,7 +70,8 @@ std::vector<float> BuildDelayedFilter(const std::vector<float>& Taps, float Dela
 
 } // namespace
 
-BinauralStage::BinauralStage(const SpeakerLayout& InLayout, const std::string& SofaPath, float SampleRate)
+BinauralStage::BinauralStage(const SpeakerLayout& InLayout, HrtfSourceKind Kind, const std::string& SofaPath,
+                             float SampleRate)
     : Layout(InLayout), FallbackStage(InLayout)
 {
     for (uint32_t k = 0; k < VirtualSpeakerCount; ++k)
@@ -71,26 +81,79 @@ BinauralStage::BinauralStage(const SpeakerLayout& InLayout, const std::string& S
         DecodeSin[k] = std::sin(AngleRadians);
     }
 
-    bHrtfLoaded = Hrtf.Open(SofaPath, SampleRate);
-    if (bHrtfLoaded)
+    if (Kind == HrtfSourceKind::SyntheticSphericalHead)
     {
+        // Pure computation, can't fail to "load" the way a SOFA file can.
+        bHrtfLoaded = true;
         for (uint32_t k = 0; k < VirtualSpeakerCount; ++k)
         {
             const float AzimuthDegrees = static_cast<float>(k) * (360.0f / VirtualSpeakerCount);
-            const HrtfLoader::Filter Filter = Hrtf.GetFilter(AzimuthDegrees, 0.0f);
+            const HrtfFilter Filter = ComputeSphericalHeadFilter(AzimuthDegrees, 0.0f, SampleRate);
 
             const std::vector<float> DelayedLeft = BuildDelayedFilter(Filter.Left, Filter.DelayLeftSamples);
             const std::vector<float> DelayedRight = BuildDelayedFilter(Filter.Right, Filter.DelayRightSamples);
             LeftConvolvers[k].Load(DelayedLeft.data(), static_cast<uint32_t>(DelayedLeft.size()));
             RightConvolvers[k].Load(DelayedRight.data(), static_cast<uint32_t>(DelayedRight.size()));
         }
-        fprintf(stderr, "[audiobatd] loaded HRTF SOFA file '%s' (%d taps @ %.0f Hz)\n", SofaPath.c_str(),
-                Hrtf.FilterLength(), SampleRate);
+        fprintf(stderr, "[audiobatd] using synthetic spherical-head HRTF model @ %.0f Hz\n", SampleRate);
     }
     else
     {
-        fprintf(stderr, "[audiobatd] Advanced spatial mode will fall back to algebraic decode until a "
-                         "valid HRTF SOFA file is available\n");
+        bHrtfLoaded = Hrtf.Open(SofaPath, SampleRate);
+        if (bHrtfLoaded)
+        {
+            std::array<HrtfFilter, VirtualSpeakerCount> Filters;
+            float PeakTap = 0.0f;
+            for (uint32_t k = 0; k < VirtualSpeakerCount; ++k)
+            {
+                const float AzimuthDegrees = static_cast<float>(k) * (360.0f / VirtualSpeakerCount);
+                Filters[k] = Hrtf.GetFilter(AzimuthDegrees, 0.0f);
+                for (float Tap : Filters[k].Left)
+                {
+                    PeakTap = std::max(PeakTap, std::fabs(Tap));
+                }
+                for (float Tap : Filters[k].Right)
+                {
+                    PeakTap = std::max(PeakTap, std::fabs(Tap));
+                }
+            }
+
+            // Different SOFA sources calibrate absolute HRIR amplitude very
+            // differently (mic gain, measurement distance normalization,
+            // etc.) - e.g. SADIE II's raw taps measured ~8x louder than
+            // MIT KEMAR's SOFA conversion for the same direction. Without
+            // this, switching HRTF sources from the GUI could suddenly
+            // blast audio many times louder or quieter. Scale every
+            // source to a fixed reference peak instead of trusting each
+            // dataset's own calibration.
+            const float NormalizationGain = PeakTap > 1e-6f ? TargetPeakTap / PeakTap : 1.0f;
+
+            for (uint32_t k = 0; k < VirtualSpeakerCount; ++k)
+            {
+                for (float& Tap : Filters[k].Left)
+                {
+                    Tap *= NormalizationGain;
+                }
+                for (float& Tap : Filters[k].Right)
+                {
+                    Tap *= NormalizationGain;
+                }
+
+                const std::vector<float> DelayedLeft =
+                    BuildDelayedFilter(Filters[k].Left, Filters[k].DelayLeftSamples);
+                const std::vector<float> DelayedRight =
+                    BuildDelayedFilter(Filters[k].Right, Filters[k].DelayRightSamples);
+                LeftConvolvers[k].Load(DelayedLeft.data(), static_cast<uint32_t>(DelayedLeft.size()));
+                RightConvolvers[k].Load(DelayedRight.data(), static_cast<uint32_t>(DelayedRight.size()));
+            }
+            fprintf(stderr, "[audiobatd] loaded HRTF SOFA file '%s' (%d taps @ %.0f Hz, normalized x%.3f)\n",
+                    SofaPath.c_str(), Hrtf.FilterLength(), SampleRate, NormalizationGain);
+        }
+        else
+        {
+            fprintf(stderr, "[audiobatd] Advanced spatial mode will fall back to algebraic decode until a "
+                             "valid HRTF SOFA file is available\n");
+        }
     }
 
     for (auto& Signal : VirtualSpeakerSignal)

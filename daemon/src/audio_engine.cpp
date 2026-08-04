@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <csignal>
+#include <filesystem>
 
 #include <pipewire/pipewire.h>
 
@@ -20,6 +21,7 @@
 #include "dsp/ambisonics_stage.hpp"
 #include "dsp/binaural_stage.hpp"
 #include "dsp/dsp_stage.hpp"
+#include "dsp/hrtf_deck.hpp"
 #include "dsp/passthrough_stage.hpp"
 #include "hardware_output.hpp"
 #include "hrtf_default_path.hpp"
@@ -87,6 +89,26 @@ std::string AudioEngine::ResolveHrtfSofaPath()
     return DefaultHrtfSofaPath;
 }
 
+std::vector<HrtfCatalogEntry> AudioEngine::BuildHrtfCatalog()
+{
+    std::vector<HrtfCatalogEntry> Result;
+    Result.reserve(HrtfCatalogCount);
+    for (size_t i = 0; i < HrtfCatalogCount; ++i)
+    {
+        const HrtfCatalogEntry& Entry = HrtfCatalog[i];
+        if (Entry.Kind == HrtfSourceKind::SyntheticSphericalHead || std::filesystem::exists(Entry.Path))
+        {
+            Result.push_back(Entry);
+        }
+        else
+        {
+            fprintf(stderr, "[audiobatd] HRTF catalog entry '%s' skipped, file not found: %s\n",
+                    Entry.DisplayName, Entry.Path);
+        }
+    }
+    return Result;
+}
+
 int AudioEngine::Run()
 {
     pw_init(nullptr, nullptr);
@@ -118,8 +140,28 @@ int AudioEngine::Run()
     InputScratch.resize(MaxScratchFrames * VirtualSink::Channels);
     OffStage = std::make_unique<PassthroughStage>();
     BasicStage = std::make_unique<AmbisonicsStage>(SharedLayout);
-    AdvancedStage = std::make_unique<BinauralStage>(SharedLayout, ResolveHrtfSofaPath(),
-                                                      static_cast<float>(HardwareOutput::SampleRate));
+
+    RuntimeHrtfCatalog = BuildHrtfCatalog();
+
+    // ResolveHrtfSofaPath() (AUDIOBAT_HRTF_SOFA or the bundled default)
+    // picks the initial HRTF source, same as before this catalog existed.
+    // If it happens to match a catalog entry, report that entry as active
+    // so the GUI's dropdown starts in sync; otherwise ActiveHrtfIndex just
+    // stays at its 0 default, since an env-var override sits outside the
+    // catalog entirely (see ResolveHrtfSofaPath's comment).
+    const std::string InitialSofaPath = ResolveHrtfSofaPath();
+    for (size_t i = 0; i < RuntimeHrtfCatalog.size(); ++i)
+    {
+        if (RuntimeHrtfCatalog[i].Kind == HrtfSourceKind::SofaFile &&
+            InitialSofaPath == RuntimeHrtfCatalog[i].Path)
+        {
+            ActiveHrtfIndex.store(static_cast<uint8_t>(i), std::memory_order_relaxed);
+            break;
+        }
+    }
+
+    AdvancedStage = std::make_unique<HrtfDeck>(SharedLayout, HrtfSourceKind::SofaFile, InitialSofaPath,
+                                                static_cast<float>(HardwareOutput::SampleRate));
 
     Sink = std::make_unique<VirtualSink>(Loop);
     Sink->SetAudioCallback(
@@ -301,9 +343,27 @@ uint32_t AudioEngine::HandleHardwareOutputRequest(float* Interleaved, uint32_t F
 
 std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
 {
+    // Reclaims whatever HrtfDeck's last completed crossfade faded out of.
+    // Not realtime-safe (may deallocate) - fine here, this runs on a
+    // per-client control thread, never the audio callback. Piggybacked on
+    // every command rather than needing a dedicated timer, since the GUI
+    // already polls GetStatus at a steady ~4Hz.
+    AdvancedStage->CollectGarbage();
+
     if (InCommand.CommandOpcode == Opcode::GetDevices)
     {
         return EncodeDeviceListResponse(Devices->GetDevices());
+    }
+
+    if (InCommand.CommandOpcode == Opcode::GetHrtfCatalog)
+    {
+        std::vector<std::string> DisplayNames;
+        DisplayNames.reserve(RuntimeHrtfCatalog.size());
+        for (const HrtfCatalogEntry& Entry : RuntimeHrtfCatalog)
+        {
+            DisplayNames.emplace_back(Entry.DisplayName);
+        }
+        return EncodeHrtfCatalogResponse(DisplayNames);
     }
 
     if (InCommand.CommandOpcode == Opcode::SetSpatialMode)
@@ -337,11 +397,30 @@ std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
     {
         bTestNoiseEnabled.store(InCommand.bTestNoiseEnabled, std::memory_order_relaxed);
     }
+    else if (InCommand.CommandOpcode == Opcode::SetHrtfFile)
+    {
+        // DecodeCommand only checked the payload shape, not that the index
+        // is actually in range for this daemon's catalog - bounds-check
+        // here before indexing.
+        if (InCommand.HrtfIndex < RuntimeHrtfCatalog.size())
+        {
+            const HrtfCatalogEntry& Entry = RuntimeHrtfCatalog[InCommand.HrtfIndex];
+            AdvancedStage->SwitchTo(Entry.Kind, Entry.Path);
+            ActiveHrtfIndex.store(InCommand.HrtfIndex, std::memory_order_relaxed);
+            fprintf(stderr, "[audiobatd] HRTF source switched to '%s'\n", Entry.DisplayName);
+        }
+        else
+        {
+            fprintf(stderr, "[audiobatd] SetHrtfFile: index %u out of range (catalog has %zu entries)\n",
+                    InCommand.HrtfIndex, RuntimeHrtfCatalog.size());
+        }
+    }
 
     Status OutStatus;
     OutStatus.Mode = Mode.load(std::memory_order_relaxed);
     OutStatus.OutputDeviceName = Output->GetTargetNodeName();
     OutStatus.bTestNoiseEnabled = bTestNoiseEnabled.load(std::memory_order_relaxed);
+    OutStatus.ActiveHrtfIndex = ActiveHrtfIndex.load(std::memory_order_relaxed);
     for (uint8_t i = 0; i < SpeakerCount; ++i)
     {
         OutStatus.SpeakerAzimuthDegrees[i] =

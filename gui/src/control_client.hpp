@@ -49,6 +49,8 @@ public:
     std::optional<Status> SetSpeakerMute(uint8_t SpeakerIndex, bool bMuted);
     std::optional<Status> SetTestNoiseEnabled(bool bEnabled);
     std::optional<std::vector<AudioDeviceInfo>> RequestDevices();
+    std::optional<std::vector<std::string>> RequestHrtfCatalog();
+    std::optional<Status> SetHrtfFile(uint8_t HrtfIndex);
 
 private:
     struct RawResponse

@@ -35,6 +35,7 @@ private:
     ControlClient Client;
     Status LastStatus;
     std::vector<AudioDeviceInfo> Devices;
+    std::vector<std::string> HrtfCatalog;
     bool bConnected = false;
 
     float ReconnectTimerSeconds = 0.0f;

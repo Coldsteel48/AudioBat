@@ -24,15 +24,28 @@ three genuinely different signal paths (`SpatialMode`: `Off` / `Basic` /
   preserve front/back distinction.
 - **Advanced**: `BinauralStage` encodes the same B-format field (via the
   shared `SpeakerLayout`), decodes it to a fixed 8-point virtual
-  loudspeaker array, and convolves each virtual speaker's signal with a
-  measured HRIR for that direction (loaded from a SOFA file via
-  libmysofa), summing the results into stereo. HRIR convolution runs
-  through a KissFFT-backed partitioned overlap-save convolver. A small
-  public-domain default HRTF dataset (MIT KEMAR, see
-  `data/hrtf/README.md`) is bundled; point the `AUDIOBAT_HRTF_SOFA`
-  environment variable at a different SOFA file to use another one. If no
-  valid SOFA file is available, Advanced mode falls back to the same
-  algebraic decode Basic mode uses rather than going silent.
+  loudspeaker array, and convolves each virtual speaker's signal with an
+  HRIR for that direction, summing the results into stereo. HRIR
+  convolution runs through a KissFFT-backed partitioned overlap-save
+  convolver. The HRIR source is either measured data (a SOFA file, loaded
+  via libmysofa) or a procedurally-computed rigid-sphere model
+  (`synthetic_hrtf.cpp`) with no data file at all. If a SofaFile source
+  fails to load, Advanced mode falls back to the same algebraic decode
+  Basic mode uses rather than going silent.
+
+  HRTF perception is highly ear-shape-specific, so which source
+  externalizes well varies per listener. `HrtfDeck` wraps two
+  `BinauralStage`s so the active source can be switched live from the
+  GUI's HRTF dropdown (or the `SetHrtfFile` control opcode) without
+  restarting the daemon, crossfading between old and new over a fixed
+  ~50ms window so switching never clicks. The bundled catalog
+  (`GetHrtfCatalog`, see `data/hrtf/README.md`) is the MIT KEMAR default,
+  8 individual subjects from the SADIE II database (Apache-2.0, safe to
+  redistribute commercially — the CIPIC/ARI/Listen mirrors were
+  deliberately avoided for exactly that reason), and the synthetic model.
+  The `AUDIOBAT_HRTF_SOFA` environment variable still works as a
+  lower-level override for the daemon's *initial* source, outside the
+  catalog entirely.
 
 All three modes sit behind the same `DspStage` interface and share one
 live-repositionable `SpeakerLayout`, so speaker position changes apply
@@ -185,9 +198,10 @@ byte][7 x speaker azimuth: f32 BE]` (status) or `[0x82][len][message]`
 2. ~~One-click 3D on/off toggle: wired end-to-end and now audibly meaningful (PassthroughStage vs AmbisonicsStage)~~
 3. ~~Real-time repositionable virtual speakers: control-protocol opcode + GUI dial~~
 4. ~~HRTF-based binaural decode (libmysofa + KissFFT), selectable as the "Advanced" `SpatialMode` alongside algebraic ambisonics~~
-5. Parametric EQ
-6. ONNX-based automatic EQ preset selection
-7. GUI polish aimed at non-audio-engineer users (v1 ships spatial mode dropdown + speaker dial only)
+5. ~~Switchable HRTF catalog (MIT KEMAR + 8 SADIE II subjects + a license-free synthetic spherical-head model) with live, crossfaded switching via `HrtfDeck` and the GUI's HRTF dropdown~~
+6. Parametric EQ
+7. ONNX-based automatic EQ preset selection
+8. GUI polish aimed at non-audio-engineer users (v1 ships spatial mode dropdown + speaker dial only)
 
 ## License
 

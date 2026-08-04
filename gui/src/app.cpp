@@ -39,6 +39,10 @@ void App::Tick(float DeltaTimeSeconds)
                     {
                         Devices = std::move(*DeviceResult);
                     }
+                    if (auto HrtfResult = Client.RequestHrtfCatalog())
+                    {
+                        HrtfCatalog = std::move(*HrtfResult);
+                    }
                     DevicePollTimerSeconds = DevicePollIntervalSeconds;
                     bConnected = true;
                 }
@@ -78,6 +82,18 @@ void App::Tick(float DeltaTimeSeconds)
             {
                 bConnected = false;
                 ReconnectTimerSeconds = 0.0f;
+            }
+            if (bConnected)
+            {
+                if (auto HrtfResult = Client.RequestHrtfCatalog())
+                {
+                    HrtfCatalog = std::move(*HrtfResult);
+                }
+                else
+                {
+                    bConnected = false;
+                    ReconnectTimerSeconds = 0.0f;
+                }
             }
         }
     }
@@ -152,6 +168,40 @@ void App::DrawUI()
             if (ImGui::Selectable(Device.Description.c_str(), bSelected))
             {
                 if (auto Result = Client.SetOutputDevice(Device.Name))
+                {
+                    LastStatus = *Result;
+                }
+                else
+                {
+                    bConnected = false;
+                    ReconnectTimerSeconds = 0.0f;
+                }
+            }
+            if (bSelected)
+            {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    ImGui::Spacing();
+    ImGui::TextUnformatted("HRTF (Advanced spatial mode)");
+
+    const int CurrentHrtfIndex = static_cast<int>(LastStatus.ActiveHrtfIndex);
+    const char* CurrentHrtfLabel =
+        (CurrentHrtfIndex >= 0 && CurrentHrtfIndex < static_cast<int>(HrtfCatalog.size()))
+            ? HrtfCatalog[static_cast<size_t>(CurrentHrtfIndex)].c_str()
+            : "(none)";
+
+    if (ImGui::BeginCombo("##hrtf_source", CurrentHrtfLabel))
+    {
+        for (int i = 0; i < static_cast<int>(HrtfCatalog.size()); ++i)
+        {
+            const bool bSelected = i == CurrentHrtfIndex;
+            if (ImGui::Selectable(HrtfCatalog[static_cast<size_t>(i)].c_str(), bSelected))
+            {
+                if (auto Result = Client.SetHrtfFile(static_cast<uint8_t>(i)))
                 {
                     LastStatus = *Result;
                 }

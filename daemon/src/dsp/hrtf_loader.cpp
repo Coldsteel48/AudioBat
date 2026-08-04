@@ -45,9 +45,9 @@ bool HrtfLoader::Open(const std::string& SofaPath, float TargetSampleRate)
     return true;
 }
 
-HrtfLoader::Filter HrtfLoader::GetFilter(float AzimuthDegrees, float ElevationDegrees) const
+HrtfFilter HrtfLoader::GetFilter(float AzimuthDegrees, float ElevationDegrees) const
 {
-    Filter Out;
+    HrtfFilter Out;
     if (!Easy)
     {
         return Out;

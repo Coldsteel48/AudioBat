@@ -9,7 +9,8 @@
 #pragma once
 
 #include <string>
-#include <vector>
+
+#include "hrtf_filter.hpp"
 
 struct MYSOFA_EASY;
 
@@ -42,19 +43,11 @@ public:
         return FilterTapCount;
     }
 
-    struct Filter
-    {
-        std::vector<float> Left;
-        std::vector<float> Right;
-        float DelayLeftSamples = 0.0f;
-        float DelayRightSamples = 0.0f;
-    };
-
     // Looks up (nearest-neighbor + interpolated) the HRIR pair for a
     // direction, matching AudioBat's azimuth convention: 0 = front,
     // positive = left. ElevationDegrees: 0 = horizontal, positive = up.
     // Returns an empty Filter if the loader isn't open.
-    Filter GetFilter(float AzimuthDegrees, float ElevationDegrees) const;
+    HrtfFilter GetFilter(float AzimuthDegrees, float ElevationDegrees) const;
 
 private:
     MYSOFA_EASY* Easy = nullptr;

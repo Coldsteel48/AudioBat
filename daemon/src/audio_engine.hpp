@@ -10,11 +10,13 @@
 
 #include <atomic>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "audiobat/protocol.hpp"
 #include "audiobat/ring_buffer.hpp"
 #include "dsp/speaker_layout.hpp"
+#include "hrtf_catalog.hpp"
 
 struct pw_main_loop;
 struct pw_loop;
@@ -27,7 +29,7 @@ class HardwareOutput;
 class DspStage;
 class PassthroughStage;
 class AmbisonicsStage;
-class BinauralStage;
+class HrtfDeck;
 class ControlServer;
 class DeviceRegistry;
 
@@ -84,10 +86,19 @@ private:
     // Returns whichever concrete stage Mode currently selects.
     DspStage& ActiveStage();
 
-    // Resolves the SOFA file BinauralStage should load: the
+    // Resolves the SOFA file BinauralStage should load initially: the
     // AUDIOBAT_HRTF_SOFA environment variable if set, else the bundled
-    // default (see data/hrtf/README.md).
+    // default (see data/hrtf/README.md). The GetHrtfCatalog/SetHrtfFile
+    // control opcodes are the normal way to switch afterward; this is a
+    // lower-level override for a SOFA file outside the catalog entirely.
     static std::string ResolveHrtfSofaPath();
+
+    // Filters the CMake-generated HrtfCatalog (hrtf_catalog.hpp) down to
+    // entries that are actually usable right now: SyntheticSphericalHead
+    // always is, SofaFile entries need their file present on disk (a
+    // bundled SADIE subject could be missing if data/hrtf/sadie/ wasn't
+    // populated). Runs once at startup.
+    static std::vector<HrtfCatalogEntry> BuildHrtfCatalog();
 
     bool bPipeWireInitialized = false;
     pw_main_loop* MainLoop = nullptr;
@@ -108,7 +119,15 @@ private:
 
     std::unique_ptr<PassthroughStage> OffStage;
     std::unique_ptr<AmbisonicsStage> BasicStage;
-    std::unique_ptr<BinauralStage> AdvancedStage;
+    std::unique_ptr<HrtfDeck> AdvancedStage;
+
+    // Result of BuildHrtfCatalog(), fixed for the process lifetime; index
+    // into this is what the GetHrtfCatalog/SetHrtfFile/Status wire values
+    // mean. Entries point at static-duration strings from the generated
+    // HrtfCatalog, so copying HrtfCatalogEntry by value here is cheap and
+    // safe.
+    std::vector<HrtfCatalogEntry> RuntimeHrtfCatalog;
+    std::atomic<uint8_t> ActiveHrtfIndex{0};
 
     // Holds processed (post-DSP) interleaved stereo samples awaiting
     // playback. Sized generously relative to a typical PipeWire quantum.

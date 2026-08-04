@@ -49,6 +49,28 @@ configure_file(
     @ONLY
 )
 
+# Full switchable HRTF catalog (see data/hrtf/README.md): the bundled MIT
+# KEMAR default, the bundled SADIE II subjects (Apache-2.0, safe to
+# redistribute - unlike the CIPIC/ARI/Listen mirrors this project
+# deliberately avoids bundling), and the license-free synthetic
+# spherical-head model. AudioEngine filters this list down to entries
+# that are actually present on disk at startup.
+set(AUDIOBAT_HRTF_CATALOG_ENTRIES
+    "    { \"MIT KEMAR (normal pinna)\", HrtfSourceKind::SofaFile, \"${CMAKE_SOURCE_DIR}/data/hrtf/default.sofa\" },\n")
+set(AUDIOBAT_SADIE_SUBJECTS H3 H5 H8 H10 H13 H15 H18 H20)
+foreach(SUBJECT ${AUDIOBAT_SADIE_SUBJECTS})
+    string(APPEND AUDIOBAT_HRTF_CATALOG_ENTRIES
+        "    { \"SADIE II - ${SUBJECT}\", HrtfSourceKind::SofaFile, \"${CMAKE_SOURCE_DIR}/data/hrtf/sadie/sadie_${SUBJECT}.sofa\" },\n")
+endforeach()
+string(APPEND AUDIOBAT_HRTF_CATALOG_ENTRIES
+    "    { \"Synthetic spherical head\", HrtfSourceKind::SyntheticSphericalHead, \"\" },\n")
+
+configure_file(
+    src/hrtf_catalog.hpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/hrtf_catalog.hpp
+    @ONLY
+)
+
 add_executable(audiobatd
     src/main.cpp
     src/audio_engine.cpp
@@ -59,13 +81,16 @@ add_executable(audiobatd
     src/dsp/speaker_layout.cpp
     src/dsp/ambisonics_stage.cpp
     src/dsp/hrtf_loader.cpp
+    src/dsp/synthetic_hrtf.cpp
     src/dsp/partitioned_convolver.cpp
     src/dsp/binaural_stage.cpp
+    src/dsp/hrtf_deck.cpp
     src/control/control_server.cpp
 )
 
 target_include_directories(audiobatd PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}/generated
+    ${CMAKE_CURRENT_SOURCE_DIR}/src # so the generated headers above can #include "dsp/..." like everything else does
     ${mysofa_BINARY_DIR}/src # generated mysofa_export.h, not part of mysofa-static's public interface
 )
 

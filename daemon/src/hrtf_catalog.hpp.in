@@ -1,0 +1,38 @@
+// AudioBat
+// Copyright (C) 2026 Roman Levin (Coldsteel48)
+//
+// This file is part of AudioBat, dual-licensed under the GNU General
+// Public License v3.0 (see LICENSE) or a separate commercial license
+// (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
+// terms of the Contributor License Agreement (see CLA.md).
+
+// CMake-generated: the full set of HRTF sources Advanced spatial mode can
+// switch between (see data/hrtf/README.md for what each one is and its
+// license). AudioEngine filters this down at startup to entries that are
+// actually usable (SyntheticSphericalHead always is; SofaFile entries
+// need their file to exist on disk) before exposing it over the control
+// protocol - see AudioEngine::BuildHrtfCatalog.
+
+#pragma once
+
+#include <cstddef>
+
+#include "dsp/binaural_stage.hpp"
+
+namespace audiobat
+{
+
+struct HrtfCatalogEntry
+{
+    const char* DisplayName;
+    HrtfSourceKind Kind;
+    const char* Path; // empty for SyntheticSphericalHead, which has no file
+};
+
+inline constexpr HrtfCatalogEntry HrtfCatalog[] = {
+@AUDIOBAT_HRTF_CATALOG_ENTRIES@
+};
+
+inline constexpr size_t HrtfCatalogCount = sizeof(HrtfCatalog) / sizeof(HrtfCatalog[0]);
+
+} // namespace audiobat

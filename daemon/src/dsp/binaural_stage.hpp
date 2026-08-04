@@ -21,23 +21,35 @@
 namespace audiobat
 {
 
+// Which kind of HRTF source BinauralStage renders its virtual speakers
+// through - see data/hrtf/README.md for what's bundled under each.
+enum class HrtfSourceKind : uint8_t
+{
+    SofaFile,              // measured HRIR data, loaded via HrtfLoader/libmysofa
+    SyntheticSphericalHead, // procedural rigid-sphere model, no data file at all
+};
+
 // "Advanced" spatial mode: HRTF-based binaural decode. Encodes 7.1 input
 // to the same first-order B-format field AmbisonicsStage uses (via the
 // shared SpeakerLayout), decodes that field to a fixed 8-point virtual
 // loudspeaker array, then convolves each virtual speaker's signal with
-// that direction's measured HRIR (from a SOFA file, via HrtfLoader) and
-// sums the results into stereo output. This is what actually preserves
-// front/back distinction that a 2-speaker algebraic decode can't.
+// that direction's HRIR - either measured (SOFA file, via HrtfLoader) or
+// procedurally computed (see synthetic_hrtf.hpp) - and sums the results
+// into stereo output. This is what actually preserves front/back
+// distinction that a 2-speaker algebraic decode can't.
 //
-// If the configured SOFA file fails to load, falls back to delegating to
-// the same algebraic decode AmbisonicsStage does, so Advanced mode never
-// produces silence just because HRTF data is unavailable.
+// If a SofaFile source fails to load, falls back to delegating to the
+// same algebraic decode AmbisonicsStage does, so Advanced mode never
+// produces silence just because HRTF data is unavailable. The synthetic
+// source has no such failure mode - it's pure computation.
 class BinauralStage final : public DspStage
 {
 public:
-    // SofaPath: path to a SOFA-format HRTF file. SampleRate: the pipeline's
-    // fixed sample rate (HRIRs are resampled to this rate on load).
-    BinauralStage(const SpeakerLayout& InLayout, const std::string& SofaPath, float SampleRate);
+    // SofaPath: path to a SOFA-format HRTF file, ignored when Kind is
+    // SyntheticSphericalHead. SampleRate: the pipeline's fixed sample
+    // rate (HRIRs are resampled to this rate on load).
+    BinauralStage(const SpeakerLayout& InLayout, HrtfSourceKind Kind, const std::string& SofaPath,
+                  float SampleRate);
 
     void Process(const float* Input, uint32_t InputChannels,
                  float* Output, uint32_t OutputChannels,
