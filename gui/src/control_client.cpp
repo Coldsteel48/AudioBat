@@ -172,6 +172,16 @@ std::optional<Status> ControlClient::SetOutputDevice(const std::string& DeviceNa
     return SendStatusRequest(EncodeSetOutputDeviceRequest(DeviceName));
 }
 
+std::optional<Status> ControlClient::SetSpeakerMute(uint8_t SpeakerIndex, bool bMuted)
+{
+    return SendStatusRequest(EncodeSetSpeakerMuteRequest(SpeakerIndex, bMuted));
+}
+
+std::optional<Status> ControlClient::SetTestNoiseEnabled(bool bEnabled)
+{
+    return SendStatusRequest(EncodeSetTestNoiseRequest(bEnabled));
+}
+
 std::optional<std::vector<AudioDeviceInfo>> ControlClient::RequestDevices()
 {
     auto Response = SendRawRequest(EncodeGetDevicesRequest());

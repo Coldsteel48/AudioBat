@@ -46,6 +46,8 @@ public:
     std::optional<Status> SetSpeakerAzimuth(uint8_t SpeakerIndex, float AzimuthDegrees);
     std::optional<Status> ResetSpeakerPositions();
     std::optional<Status> SetOutputDevice(const std::string& DeviceName);
+    std::optional<Status> SetSpeakerMute(uint8_t SpeakerIndex, bool bMuted);
+    std::optional<Status> SetTestNoiseEnabled(bool bEnabled);
     std::optional<std::vector<AudioDeviceInfo>> RequestDevices();
 
 private:

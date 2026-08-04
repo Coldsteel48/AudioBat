@@ -69,6 +69,18 @@ private:
     uint32_t HandleHardwareOutputRequest(float* Interleaved, uint32_t Frames);
     std::vector<uint8_t> HandleControlCommand(const Command& InCommand);
 
+    // Zeroes out the non-LFE channels of any currently-muted speaker
+    // in-place. Snapshots mute flags once per block, same pattern as
+    // SpeakerLayout::SnapshotDirections - mute state only changes from
+    // control commands, never at audio rate.
+    void ApplySpeakerMute(float* Interleaved, uint32_t Frames);
+
+    // Fills Interleaved with decorrelated white noise on every non-LFE
+    // channel (LFE stays silent), for speaker-calibration purposes:
+    // combined with ApplySpeakerMute, lets the user isolate one physical
+    // speaker at a time regardless of what's actually playing.
+    void FillTestNoise(float* Interleaved, uint32_t Frames);
+
     // Returns whichever concrete stage Mode currently selects.
     DspStage& ActiveStage();
 
@@ -88,6 +100,11 @@ private:
 
     SpeakerLayout SharedLayout;
     std::atomic<SpatialMode> Mode{SpatialMode::Off};
+    std::atomic<bool> bTestNoiseEnabled{false};
+
+    // State for FillTestNoise()'s xorshift32 PRNG; advanced once per
+    // generated sample. Only ever touched from the realtime audio thread.
+    uint32_t NoiseState = 0x9E3779B9u;
 
     std::unique_ptr<PassthroughStage> OffStage;
     std::unique_ptr<AmbisonicsStage> BasicStage;
@@ -100,6 +117,13 @@ private:
     // Scratch buffer for the DSP stage's stereo output, reused per virtual
     // sink callback to avoid allocating on the realtime thread.
     std::vector<float> DspScratch;
+
+    // Holds the 7.1 signal actually fed to the active DSP stage: either a
+    // copy of the captured input or synthesized test noise, with muted
+    // speakers zeroed - see FillTestNoise()/ApplySpeakerMute(). Always
+    // copied into rather than mutating the captured buffer in place, since
+    // that buffer belongs to VirtualSink.
+    std::vector<float> InputScratch;
 };
 
 } // namespace audiobat

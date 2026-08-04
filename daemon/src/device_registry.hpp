@@ -21,6 +21,7 @@ struct pw_loop;
 struct pw_context;
 struct pw_core;
 struct pw_registry;
+struct pw_metadata;
 struct spa_dict;
 
 namespace audiobat
@@ -31,6 +32,16 @@ namespace audiobat
 // remove events on its own context/core connection - separate from the
 // VirtualSink/HardwareOutput streams so device discovery keeps working
 // independently of whether those streams are currently connected.
+//
+// Also claims the PipeWire virtual sink as the system default output as
+// soon as the session's "default" metadata object appears in the
+// registry (see HandleGlobalAdded/ClaimVirtualSinkAsDefault): this isn't
+// just convenience routing - re-asserting default.configured.audio.sink
+// nudges WirePlumber's default-nodes policy to reconcile any client
+// stream that got created before it had resolved a target and was
+// otherwise sitting unlinked (silently producing no sound) until
+// something touched that metadata, which is what manually opening a
+// system volume mixer was observed to fix.
 //
 // Registry events land on the PipeWire main-loop thread (the same thread
 // AudioEngine::Run() drives); GetDevices() is called from ControlServer's
@@ -56,11 +67,19 @@ public:
     void HandleGlobalRemoved(uint32_t Id);
 
 private:
+    // Sets default.configured.audio.sink to VirtualSink::NodeName via the
+    // bound "default" metadata object. Called once, as soon as that
+    // object is bound (see HandleGlobalAdded) - re-sent every time the
+    // daemon (re)starts and this registry connection reconnects, since a
+    // fresh connection re-discovers the metadata global from scratch.
+    void ClaimVirtualSinkAsDefault();
+
     pw_loop* Loop;
     pw_context* Context = nullptr;
     pw_core* Core = nullptr;
     pw_registry* Registry = nullptr;
     spa_hook RegistryListener{};
+    pw_metadata* DefaultMetadata = nullptr;
 
     mutable std::mutex DevicesMutex;
     std::unordered_map<uint32_t, AudioDeviceInfo> DevicesById;

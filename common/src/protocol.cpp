@@ -129,6 +129,21 @@ std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8_t* Payload, ui
         return OutCommand;
     case Opcode::ResetSpeakerPositions:
         return OutCommand;
+    case Opcode::SetSpeakerMute:
+        if (PayloadLength < 2 || Payload[0] >= SpeakerCount)
+        {
+            return std::nullopt;
+        }
+        OutCommand.SpeakerIndex = Payload[0];
+        OutCommand.bMuted = Payload[1] != 0;
+        return OutCommand;
+    case Opcode::SetTestNoise:
+        if (PayloadLength < 1)
+        {
+            return std::nullopt;
+        }
+        OutCommand.bTestNoiseEnabled = Payload[0] != 0;
+        return OutCommand;
     default:
         return std::nullopt;
     }
@@ -136,7 +151,8 @@ std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8_t* Payload, ui
 
 std::optional<Status> DecodeStatusResponse(const uint8_t* Payload, uint16_t PayloadLength)
 {
-    const uint16_t FixedSize = static_cast<uint16_t>(1 + 4 * SpeakerCount);
+    // Layout: [mode:1][azimuths: 4*SpeakerCount][muted: SpeakerCount][noise:1][device: length-prefixed string]
+    const uint16_t FixedSize = static_cast<uint16_t>(1 + 4 * SpeakerCount + SpeakerCount + 1);
     if (PayloadLength < FixedSize || Payload[0] > static_cast<uint8_t>(SpatialMode::Advanced))
     {
         return std::nullopt;
@@ -147,6 +163,12 @@ std::optional<Status> DecodeStatusResponse(const uint8_t* Payload, uint16_t Payl
     {
         OutStatus.SpeakerAzimuthDegrees[i] = ReadFloatBE(Payload + 1 + 4 * i);
     }
+    const size_t MutedOffset = 1 + 4 * SpeakerCount;
+    for (size_t i = 0; i < SpeakerCount; ++i)
+    {
+        OutStatus.SpeakerMuted[i] = Payload[MutedOffset + i] != 0;
+    }
+    OutStatus.bTestNoiseEnabled = Payload[MutedOffset + SpeakerCount] != 0;
 
     size_t Offset = FixedSize;
     if (!ReadString(Payload, PayloadLength, Offset, OutStatus.OutputDeviceName))
@@ -195,6 +217,11 @@ std::vector<uint8_t> EncodeStatusResponse(const Status& InStatus)
     {
         AppendFloatBE(Payload, Azimuth);
     }
+    for (bool bMuted : InStatus.SpeakerMuted)
+    {
+        Payload.push_back(bMuted ? 1 : 0);
+    }
+    Payload.push_back(InStatus.bTestNoiseEnabled ? 1 : 0);
     AppendString(Payload, InStatus.OutputDeviceName);
 
     std::vector<uint8_t> Out;
@@ -290,6 +317,25 @@ std::vector<uint8_t> EncodeResetSpeakerPositionsRequest()
 {
     std::vector<uint8_t> Out;
     AppendHeader(Out, Opcode::ResetSpeakerPositions, 0);
+    return Out;
+}
+
+std::vector<uint8_t> EncodeSetSpeakerMuteRequest(uint8_t SpeakerIndex, bool bMuted)
+{
+    std::vector<uint8_t> Out;
+    Out.reserve(HeaderSize + 2);
+    AppendHeader(Out, Opcode::SetSpeakerMute, 2);
+    Out.push_back(SpeakerIndex);
+    Out.push_back(bMuted ? 1 : 0);
+    return Out;
+}
+
+std::vector<uint8_t> EncodeSetTestNoiseRequest(bool bEnabled)
+{
+    std::vector<uint8_t> Out;
+    Out.reserve(HeaderSize + 1);
+    AppendHeader(Out, Opcode::SetTestNoise, 1);
+    Out.push_back(bEnabled ? 1 : 0);
     return Out;
 }
 

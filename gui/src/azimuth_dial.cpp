@@ -43,9 +43,15 @@ float ScreenPosToAzimuth(ImVec2 Center, ImVec2 Pos)
 } // namespace
 
 bool DrawAzimuthDial(const char* Label, std::array<float, SpeakerCount>& AzimuthsDegrees,
-                      int* OutChangedIndex)
+                      const std::array<bool, SpeakerCount>& Muted, int* OutChangedAzimuthIndex,
+                      int* OutMuteToggledIndex, int* OutSoloIndex, float Scale)
 {
-    *OutChangedIndex = -1;
+    *OutChangedAzimuthIndex = -1;
+    *OutMuteToggledIndex = -1;
+    *OutSoloIndex = -1;
+
+    const float ScaledDialSize = DialSize * Scale;
+    const float ScaledHandleRadius = HandleRadius * Scale;
 
     ImGui::PushID(Label);
     ImGui::BeginGroup();
@@ -54,13 +60,13 @@ bool DrawAzimuthDial(const char* Label, std::array<float, SpeakerCount>& Azimuth
     ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
     const ImVec2 Origin = ImGui::GetCursorScreenPos();
-    const ImVec2 Center(Origin.x + DialSize * 0.5f, Origin.y + DialSize * 0.5f);
-    const float Radius = DialSize * 0.5f - HandleRadius - 4.0f;
+    const ImVec2 Center(Origin.x + ScaledDialSize * 0.5f, Origin.y + ScaledDialSize * 0.5f);
+    const float Radius = ScaledDialSize * 0.5f - ScaledHandleRadius - 4.0f * Scale;
 
-    DrawList->AddCircle(Center, Radius, IM_COL32(120, 120, 135, 255), 64, 1.5f);
-    DrawList->AddLine(Center, ImVec2(Center.x, Center.y - Radius), IM_COL32(90, 200, 255, 180), 2.0f);
-    DrawList->AddText(ImVec2(Center.x - 18, Center.y - Radius - 18), IM_COL32(180, 190, 200, 255),
-                       "FRONT");
+    DrawList->AddCircle(Center, Radius, IM_COL32(120, 120, 135, 255), 64, 1.5f * Scale);
+    DrawList->AddLine(Center, ImVec2(Center.x, Center.y - Radius), IM_COL32(90, 200, 255, 180), 2.0f * Scale);
+    DrawList->AddText(ImVec2(Center.x - 18.0f * Scale, Center.y - Radius - 18.0f * Scale),
+                       IM_COL32(180, 190, 200, 255), "FRONT");
 
     bool bChanged = false;
     for (size_t i = 0; i < SpeakerCount; ++i)
@@ -70,8 +76,8 @@ bool DrawAzimuthDial(const char* Label, std::array<float, SpeakerCount>& Azimuth
         const ImVec2 Direction = AzimuthToUnitVector(AzimuthsDegrees[i]);
         const ImVec2 HandlePos(Center.x + Radius * Direction.x, Center.y + Radius * Direction.y);
 
-        ImGui::SetCursorScreenPos(ImVec2(HandlePos.x - HandleRadius, HandlePos.y - HandleRadius));
-        ImGui::InvisibleButton("handle", ImVec2(HandleRadius * 2.0f, HandleRadius * 2.0f));
+        ImGui::SetCursorScreenPos(ImVec2(HandlePos.x - ScaledHandleRadius, HandlePos.y - ScaledHandleRadius));
+        ImGui::InvisibleButton("handle", ImVec2(ScaledHandleRadius * 2.0f, ScaledHandleRadius * 2.0f));
         const bool bActive = ImGui::IsItemActive();
         const bool bHovered = ImGui::IsItemHovered();
 
@@ -79,20 +85,56 @@ bool DrawAzimuthDial(const char* Label, std::array<float, SpeakerCount>& Azimuth
         {
             AzimuthsDegrees[i] = ScreenPosToAzimuth(Center, IO.MousePos);
             bChanged = true;
-            *OutChangedIndex = static_cast<int>(i);
+            *OutChangedAzimuthIndex = static_cast<int>(i);
         }
 
-        const ImU32 HandleColor = bActive     ? IM_COL32(255, 200, 80, 255)
+        const bool bIsMuted = Muted[i];
+        const ImU32 HandleColor = bIsMuted   ? IM_COL32(140, 90, 90, 255)
+                                   : bActive  ? IM_COL32(255, 200, 80, 255)
                                    : bHovered ? IM_COL32(255, 255, 255, 255)
                                               : IM_COL32(90, 200, 255, 255);
-        DrawList->AddCircleFilled(HandlePos, HandleRadius, HandleColor);
-        DrawList->AddText(ImVec2(HandlePos.x + HandleRadius + 2.0f, HandlePos.y - 7.0f),
-                           IM_COL32(200, 205, 210, 255), SpeakerLabels[i]);
+        DrawList->AddCircleFilled(HandlePos, ScaledHandleRadius, HandleColor);
+
+        // The label doubles as the speaker's mute control - right next to
+        // its handle, rather than in a separate list elsewhere in the UI.
+        const ImVec2 LabelPos(HandlePos.x + ScaledHandleRadius + 2.0f * Scale, HandlePos.y - 7.0f * Scale);
+        const ImVec2 LabelTextSize = ImGui::CalcTextSize(SpeakerLabels[i]);
+
+        ImGui::SetCursorScreenPos(LabelPos);
+        ImGui::InvisibleButton("mute_toggle", LabelTextSize);
+        const bool bLabelHovered = ImGui::IsItemHovered();
+        if (ImGui::IsItemClicked())
+        {
+            if (ImGui::GetIO().KeyCtrl)
+            {
+                *OutSoloIndex = static_cast<int>(i);
+            }
+            else
+            {
+                *OutMuteToggledIndex = static_cast<int>(i);
+            }
+        }
+        if (bLabelHovered)
+        {
+            ImGui::SetTooltip("Click: mute/unmute %s\nCtrl+click: solo %s (mute all others)",
+                               SpeakerLabels[i], SpeakerLabels[i]);
+        }
+
+        const ImU32 LabelColor = bIsMuted        ? IM_COL32(235, 90, 90, 255)
+                                  : bLabelHovered ? IM_COL32(255, 255, 255, 255)
+                                                  : IM_COL32(200, 205, 210, 255);
+        DrawList->AddText(LabelPos, LabelColor, SpeakerLabels[i]);
+        if (bIsMuted)
+        {
+            const float StrikeY = LabelPos.y + LabelTextSize.y * 0.5f;
+            DrawList->AddLine(ImVec2(LabelPos.x, StrikeY), ImVec2(LabelPos.x + LabelTextSize.x, StrikeY),
+                               IM_COL32(235, 90, 90, 255), 1.5f * Scale);
+        }
 
         ImGui::PopID();
     }
 
-    ImGui::SetCursorScreenPos(ImVec2(Origin.x, Origin.y + DialSize));
+    ImGui::SetCursorScreenPos(ImVec2(Origin.x, Origin.y + ScaledDialSize));
     ImGui::EndGroup();
     ImGui::PopID();
 

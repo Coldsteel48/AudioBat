@@ -41,6 +41,8 @@ enum class Opcode : uint8_t
     GetDevices = 0x04,
     SetOutputDevice = 0x05,
     ResetSpeakerPositions = 0x06,
+    SetSpeakerMute = 0x07,
+    SetTestNoise = 0x08,
     // Responses
     StatusResponse = 0x81,
     ErrorResponse = 0x82,
@@ -77,8 +79,10 @@ struct Command
 {
     Opcode CommandOpcode = Opcode::GetStatus;
     SpatialMode ModeValue = SpatialMode::Off; // valid when CommandOpcode == SetSpatialMode
-    uint8_t SpeakerIndex = 0;     // valid when CommandOpcode == SetSpeakerAzimuth, 0..SpeakerCount-1
+    uint8_t SpeakerIndex = 0;     // valid when CommandOpcode == SetSpeakerAzimuth or SetSpeakerMute, 0..SpeakerCount-1
     float AzimuthDegrees = 0.0f;  // valid when CommandOpcode == SetSpeakerAzimuth
+    bool bMuted = false;          // valid when CommandOpcode == SetSpeakerMute
+    bool bTestNoiseEnabled = false; // valid when CommandOpcode == SetTestNoise
     std::string OutputDeviceName; // valid when CommandOpcode == SetOutputDevice
 };
 
@@ -86,6 +90,8 @@ struct Status
 {
     SpatialMode Mode = SpatialMode::Off;
     std::array<float, SpeakerCount> SpeakerAzimuthDegrees{};
+    std::array<bool, SpeakerCount> SpeakerMuted{};
+    bool bTestNoiseEnabled = false;
     std::string OutputDeviceName; // node.name of the currently pinned hardware output sink
 };
 
@@ -144,6 +150,8 @@ std::vector<uint8_t> EncodeSetSpeakerAzimuthRequest(uint8_t SpeakerIndex, float 
 std::vector<uint8_t> EncodeGetDevicesRequest();
 std::vector<uint8_t> EncodeSetOutputDeviceRequest(const std::string& DeviceName);
 std::vector<uint8_t> EncodeResetSpeakerPositionsRequest();
+std::vector<uint8_t> EncodeSetSpeakerMuteRequest(uint8_t SpeakerIndex, bool bMuted);
+std::vector<uint8_t> EncodeSetTestNoiseRequest(bool bEnabled);
 
 // Resolves the default control socket path: $XDG_RUNTIME_DIR/audiobat/control.sock,
 // falling back to /tmp/audiobat-<uid>/control.sock if XDG_RUNTIME_DIR isn't set.

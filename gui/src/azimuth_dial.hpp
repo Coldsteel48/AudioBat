@@ -21,10 +21,26 @@ namespace audiobat::gui
 // positive = left, negative = right - same as AmbisonicsStage.
 //
 // Returns true if the user dragged a handle this frame, in which case
-// *OutChangedIndex is the speaker index whose AzimuthsDegrees entry was
-// updated in place; the caller decides when/how often to push that value
-// to the daemon (e.g. throttled while dragging, or on release).
+// *OutChangedAzimuthIndex is the speaker index whose AzimuthsDegrees entry
+// was updated in place; the caller decides when/how often to push that
+// value to the daemon (e.g. throttled while dragging, or on release).
+//
+// Each speaker's label doubles as its mute control, right next to its
+// handle: a plain click sets *OutMuteToggledIndex to that speaker's index
+// (caller should send the opposite of its current Muted state); Ctrl+click
+// sets *OutSoloIndex instead (caller should mute every other speaker and
+// unmute this one). Muted is read-only here - it only reflects
+// daemon-confirmed state for drawing (e.g. a strikethrough label), the
+// caller owns actually sending mute/solo changes and updating it.
+// *OutMuteToggledIndex and *OutSoloIndex are set to -1 when nothing of that
+// kind happened this frame.
+//
+// Scale multiplies every pixel size the dial draws itself at (radius,
+// handle size, line thickness, label offsets) - the widget is entirely
+// custom ImDrawList calls, so it doesn't pick up DPI scaling from ImGui's
+// style/font the way regular widgets do.
 bool DrawAzimuthDial(const char* Label, std::array<float, SpeakerCount>& AzimuthsDegrees,
-                      int* OutChangedIndex);
+                      const std::array<bool, SpeakerCount>& Muted, int* OutChangedAzimuthIndex,
+                      int* OutMuteToggledIndex, int* OutSoloIndex, float Scale = 1.0f);
 
 } // namespace audiobat::gui

@@ -170,10 +170,31 @@ void App::DrawUI()
     }
 
     ImGui::Spacing();
-    ImGui::TextUnformatted("Speaker positions");
+    ImGui::TextUnformatted("Speaker positions (click a label to mute, Ctrl+click to solo)");
 
-    int ChangedIndex = -1;
-    const bool bDialChanged = DrawAzimuthDial("speaker_dial", LastStatus.SpeakerAzimuthDegrees, &ChangedIndex);
+    // Sends one mute/unmute command and folds the response into LastStatus;
+    // on failure, flags disconnected the same way every other request
+    // above does and reports the failure to the caller so a multi-command
+    // sequence (Solo, Unmute all) stops rather than spamming a dead
+    // connection.
+    auto SetSpeakerMuted = [&](uint8_t SpeakerIndex, bool bMuted) -> bool
+    {
+        if (auto Result = Client.SetSpeakerMute(SpeakerIndex, bMuted))
+        {
+            LastStatus = *Result;
+            return true;
+        }
+        bConnected = false;
+        ReconnectTimerSeconds = 0.0f;
+        return false;
+    };
+
+    int ChangedAzimuthIndex = -1;
+    int MuteToggledIndex = -1;
+    int SoloIndex = -1;
+    const bool bDialChanged =
+        DrawAzimuthDial("speaker_dial", LastStatus.SpeakerAzimuthDegrees, LastStatus.SpeakerMuted,
+                         &ChangedAzimuthIndex, &MuteToggledIndex, &SoloIndex, DpiScale);
 
     if (bDialChanged)
     {
@@ -181,8 +202,9 @@ void App::DrawUI()
         if (AzimuthSendTimerSeconds <= 0.0f)
         {
             AzimuthSendTimerSeconds = AzimuthSendIntervalSeconds;
-            if (auto Result = Client.SetSpeakerAzimuth(static_cast<uint8_t>(ChangedIndex),
-                                                         LastStatus.SpeakerAzimuthDegrees[ChangedIndex]))
+            if (auto Result = Client.SetSpeakerAzimuth(
+                    static_cast<uint8_t>(ChangedAzimuthIndex),
+                    LastStatus.SpeakerAzimuthDegrees[ChangedAzimuthIndex]))
             {
                 LastStatus = *Result;
             }
@@ -198,9 +220,55 @@ void App::DrawUI()
         AzimuthSendTimerSeconds = 0.0f;
     }
 
+    if (MuteToggledIndex >= 0)
+    {
+        SetSpeakerMuted(static_cast<uint8_t>(MuteToggledIndex),
+                         !LastStatus.SpeakerMuted[static_cast<size_t>(MuteToggledIndex)]);
+    }
+
+    if (SoloIndex >= 0)
+    {
+        // Mute every other speaker and unmute this one so it can be heard
+        // in isolation; stop early if the connection drops.
+        for (uint8_t j = 0; j < SpeakerCount && bConnected; ++j)
+        {
+            if (!SetSpeakerMuted(j, j != static_cast<uint8_t>(SoloIndex)))
+            {
+                break;
+            }
+        }
+    }
+
     if (ImGui::Button("Reset speaker positions"))
     {
         if (auto Result = Client.ResetSpeakerPositions())
+        {
+            LastStatus = *Result;
+        }
+        else
+        {
+            bConnected = false;
+            ReconnectTimerSeconds = 0.0f;
+        }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Unmute all"))
+    {
+        for (uint8_t i = 0; i < SpeakerCount && bConnected; ++i)
+        {
+            if (!SetSpeakerMuted(i, false))
+            {
+                break;
+            }
+        }
+    }
+
+    ImGui::Spacing();
+    bool bTestNoiseEnabled = LastStatus.bTestNoiseEnabled;
+    if (ImGui::Checkbox("Play test noise on all speakers", &bTestNoiseEnabled))
+    {
+        if (auto Result = Client.SetTestNoiseEnabled(bTestNoiseEnabled))
         {
             LastStatus = *Result;
         }

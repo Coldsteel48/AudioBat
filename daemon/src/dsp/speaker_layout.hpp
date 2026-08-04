@@ -45,6 +45,13 @@ public:
     void SetSpeakerAzimuth(SpeakerChannel Speaker, float AzimuthDegrees);
     float GetSpeakerAzimuth(SpeakerChannel Speaker) const;
 
+    // Mutes/unmutes a virtual speaker live; safe to call from any thread.
+    // AudioEngine zeroes a muted speaker's source signal before it's
+    // encoded into the shared field, so muting is independent of which
+    // spatial mode is active.
+    void SetSpeakerMuted(SpeakerChannel Speaker, bool bMuted);
+    bool IsSpeakerMuted(SpeakerChannel Speaker) const;
+
     // Restores all 7 speakers to the default ITU-ish layout; safe to call
     // from any thread, same as SetSpeakerAzimuth.
     void ResetSpeakerAzimuths();
@@ -69,6 +76,7 @@ public:
 
 private:
     std::array<std::atomic<float>, SpeakerCount> SpeakerAzimuthDegrees;
+    std::array<std::atomic<bool>, SpeakerCount> SpeakerMuted{};
 };
 
 } // namespace audiobat

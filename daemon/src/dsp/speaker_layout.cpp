@@ -48,6 +48,16 @@ float SpeakerLayout::GetSpeakerAzimuth(SpeakerChannel Speaker) const
     return SpeakerAzimuthDegrees[Speaker].load(std::memory_order_relaxed);
 }
 
+void SpeakerLayout::SetSpeakerMuted(SpeakerChannel Speaker, bool bMuted)
+{
+    SpeakerMuted[Speaker].store(bMuted, std::memory_order_relaxed);
+}
+
+bool SpeakerLayout::IsSpeakerMuted(SpeakerChannel Speaker) const
+{
+    return SpeakerMuted[Speaker].load(std::memory_order_relaxed);
+}
+
 void SpeakerLayout::ResetSpeakerAzimuths()
 {
     for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)

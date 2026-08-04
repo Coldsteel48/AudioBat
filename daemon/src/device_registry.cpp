@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include <pipewire/extensions/metadata.h>
 #include <pipewire/pipewire.h>
 #include <spa/utils/dict.h>
 
@@ -52,6 +53,10 @@ DeviceRegistry::DeviceRegistry(pw_loop* InLoop) : Loop(InLoop)
 
 DeviceRegistry::~DeviceRegistry()
 {
+    if (DefaultMetadata)
+    {
+        pw_proxy_destroy(reinterpret_cast<pw_proxy*>(DefaultMetadata));
+    }
     if (Registry)
     {
         spa_hook_remove(&RegistryListener);
@@ -96,7 +101,30 @@ bool DeviceRegistry::Start()
 
 void DeviceRegistry::HandleGlobalAdded(uint32_t Id, const char* Type, const spa_dict* Props)
 {
-    if (!Props || std::strcmp(Type, PW_TYPE_INTERFACE_Node) != 0)
+    if (!Props)
+    {
+        return;
+    }
+
+    if (std::strcmp(Type, PW_TYPE_INTERFACE_Metadata) == 0)
+    {
+        // The session-wide "default" metadata object - there's exactly
+        // one, holding default.configured.audio.sink/source among other
+        // things. Bind it once and immediately claim the virtual sink.
+        const char* MetadataName = spa_dict_lookup(Props, PW_KEY_METADATA_NAME);
+        if (!DefaultMetadata && MetadataName && std::strcmp(MetadataName, "default") == 0)
+        {
+            DefaultMetadata = reinterpret_cast<pw_metadata*>(
+                pw_registry_bind(Registry, Id, Type, PW_VERSION_METADATA, 0));
+            if (DefaultMetadata)
+            {
+                ClaimVirtualSinkAsDefault();
+            }
+        }
+        return;
+    }
+
+    if (std::strcmp(Type, PW_TYPE_INTERFACE_Node) != 0)
     {
         return;
     }
@@ -124,6 +152,21 @@ void DeviceRegistry::HandleGlobalAdded(uint32_t Id, const char* Type, const spa_
 
     std::lock_guard<std::mutex> Lock(DevicesMutex);
     DevicesById[Id] = std::move(Info);
+}
+
+void DeviceRegistry::ClaimVirtualSinkAsDefault()
+{
+    // Same key/value shape `wpctl set-default` writes. Re-sending it even
+    // when it's already the persisted default is the point: PipeWire's
+    // metadata implementation broadcasts a property event on every
+    // set_property() call regardless of whether the value actually
+    // changed, and that's what nudges WirePlumber's default-nodes policy
+    // to reconcile any stream that's been sitting unlinked since before
+    // this daemon (re)started.
+    char Value[128];
+    std::snprintf(Value, sizeof(Value), "{ \"name\": \"%s\" }", VirtualSink::NodeName);
+    pw_metadata_set_property(DefaultMetadata, PW_ID_CORE, "default.configured.audio.sink",
+                              "Spa:String:JSON", Value);
 }
 
 void DeviceRegistry::HandleGlobalRemoved(uint32_t Id)

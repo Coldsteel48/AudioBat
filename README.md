@@ -69,7 +69,9 @@ whichever mode is active.
   device.
 - The daemon captures from that virtual sink, runs it through whichever
   DSP stage the current `SpatialMode` selects, and plays the result out
-  through a second PipeWire stream that targets the real default sink.
+  through a second PipeWire stream pinned to a specific real hardware
+  sink (selectable live via the control protocol/GUI, not "whatever is
+  currently default").
 - The **GUI control app** (`audiobat-gui`, Dear ImGui + SDL2/OpenGL3) talks
   to the daemon over the Unix domain socket to switch spatial mode and
   reposition virtual speakers live, and (later) manage EQ — all in real
@@ -142,17 +144,23 @@ The daemon binary is `build/daemon/audiobatd`.
 ./build/daemon/audiobatd
 ```
 
-This creates the "AudioBat Virtual Sink" in the PipeWire graph and starts
-a playback stream to your default hardware sink. Route any app's output to
-the virtual sink (e.g. via `pavucontrol`, `wpctl`, or `pw-play --target
-audiobat_virtual_sink some_7.1_file.wav`) to hear it downmixed through
-AudioBat. Stop the daemon with Ctrl+C or `SIGTERM`; it tears down the
-virtual sink and unlinks the control socket on the way out.
+This creates the "AudioBat Virtual Sink" in the PipeWire graph and starts a
+playback stream pinned to a specific real hardware sink (hardcoded in
+`AudioEngine::Run()` for now; swap live via `SetOutputDevice` / the GUI's
+output device picker). The daemon also claims the virtual sink as your
+system default output as soon as it starts (see `DeviceRegistry::
+ClaimVirtualSinkAsDefault()`), so most apps route to it automatically with
+no manual step. If you'd rather route a specific app instead of changing
+the system default, use `pavucontrol`, `wpctl`, or `pw-play --target
+audiobat_virtual_sink some_7.1_file.wav`. Stop the daemon with Ctrl+C or
+`SIGTERM`; it tears down the virtual sink and unlinks the control socket
+on the way out.
 
-**Caveat:** don't set "AudioBat Virtual Sink" as your system default
-sink — the daemon's own output stream autoconnects to whatever the default
-sink is, and making the virtual sink the default would create a feedback
-loop.
+Setting the virtual sink as default is safe against feedback: the
+daemon's own hardware output stream is pinned by `target.object` (and
+`node.dont-reconnect`) to the real sink it was configured with, so it
+never resolves to "whatever is default" and can't loop back into the
+virtual sink it just claimed.
 
 ### Testing the control socket manually
 

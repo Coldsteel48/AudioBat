@@ -21,10 +21,16 @@ namespace audiobat::gui
 class App
 {
 public:
+    explicit App(float InDpiScale) : DpiScale(InDpiScale)
+    {
+    }
+
     void Tick(float DeltaTimeSeconds);
 
 private:
     void DrawUI();
+
+    float DpiScale = 1.0f;
 
     ControlClient Client;
     Status LastStatus;

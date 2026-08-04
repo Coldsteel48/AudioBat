@@ -10,6 +10,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <csignal>
 
 #include <pipewire/pipewire.h>
@@ -43,6 +44,31 @@ constexpr uint32_t MaxScratchFrames = MaxProcessFrames;
 // validated. A future control-protocol command will let the user pick any
 // compatible stereo sink live instead of this being fixed at startup.
 constexpr const char* TestOutputNodeName = "alsa_output.usb-SteelSeries_Arctis_7P_-00.analog-stereo";
+
+// Raw 7.1 input channel order, matching the layout VirtualSink captures
+// (same convention duplicated locally in ambisonics_stage.cpp and
+// passthrough_stage.cpp).
+enum SevenOneChannel : uint32_t
+{
+    FL = 0,
+    FR = 1,
+    FC = 2,
+    LFE = 3,
+    RL = 4,
+    RR = 5,
+    SL = 6,
+    SR = 7,
+};
+
+// Maps SpeakerLayout::SpeakerChannel index (0..6, non-LFE order FL,FR,FC,
+// RL,RR,SL,SR) to its frame offset within the 8-channel interleaved 7.1
+// layout above.
+constexpr uint32_t SpeakerToFrameIndex[SpeakerCount] = {FL, FR, FC, RL, RR, SL, SR};
+
+// Test noise amplitude: loud enough to clearly identify a speaker, quiet
+// enough not to be unpleasant or risk clipping once decoded/summed.
+constexpr float TestNoiseGain = 0.25f;
+
 } // namespace
 
 AudioEngine::AudioEngine() = default;
@@ -89,6 +115,7 @@ int AudioEngine::Run()
     pw_loop_add_signal(Loop, SIGTERM, OnSignal, this);
 
     DspScratch.resize(MaxScratchFrames * HardwareOutput::Channels);
+    InputScratch.resize(MaxScratchFrames * VirtualSink::Channels);
     OffStage = std::make_unique<PassthroughStage>();
     BasicStage = std::make_unique<AmbisonicsStage>(SharedLayout);
     AdvancedStage = std::make_unique<BinauralStage>(SharedLayout, ResolveHrtfSofaPath(),
@@ -201,9 +228,69 @@ void AudioEngine::HandleVirtualSinkAudio(const float* Interleaved, uint32_t Fram
         Frames = MaxScratchFrames; // drop overflow rather than overrun the scratch buffer
     }
 
-    ActiveStage().Process(Interleaved, VirtualSink::Channels, DspScratch.data(),
+    if (bTestNoiseEnabled.load(std::memory_order_relaxed))
+    {
+        FillTestNoise(InputScratch.data(), Frames);
+    }
+    else
+    {
+        std::memcpy(InputScratch.data(), Interleaved, sizeof(float) * Frames * VirtualSink::Channels);
+    }
+    ApplySpeakerMute(InputScratch.data(), Frames);
+
+    ActiveStage().Process(InputScratch.data(), VirtualSink::Channels, DspScratch.data(),
                            HardwareOutput::Channels, Frames);
     StereoMixBuffer.Push(DspScratch.data(), Frames * HardwareOutput::Channels);
+}
+
+void AudioEngine::ApplySpeakerMute(float* Interleaved, uint32_t Frames)
+{
+    bool MuteFlags[SpeakerCount];
+    bool bAnyMuted = false;
+    for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
+    {
+        MuteFlags[Speaker] = SharedLayout.IsSpeakerMuted(static_cast<SpeakerLayout::SpeakerChannel>(Speaker));
+        bAnyMuted |= MuteFlags[Speaker];
+    }
+    if (!bAnyMuted)
+    {
+        return;
+    }
+
+    for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
+    {
+        float* Frame = Interleaved + FrameIndex * VirtualSink::Channels;
+        for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
+        {
+            if (MuteFlags[Speaker])
+            {
+                Frame[SpeakerToFrameIndex[Speaker]] = 0.0f;
+            }
+        }
+    }
+}
+
+void AudioEngine::FillTestNoise(float* Interleaved, uint32_t Frames)
+{
+    for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
+    {
+        float* Frame = Interleaved + FrameIndex * VirtualSink::Channels;
+        for (uint32_t Channel = 0; Channel < VirtualSink::Channels; ++Channel)
+        {
+            if (Channel == LFE)
+            {
+                Frame[Channel] = 0.0f;
+                continue;
+            }
+            // xorshift32: cheap, allocation-free, good enough decorrelation
+            // between channels for identifying a speaker by ear.
+            NoiseState ^= NoiseState << 13;
+            NoiseState ^= NoiseState >> 17;
+            NoiseState ^= NoiseState << 5;
+            const float Uniform01 = static_cast<float>(NoiseState >> 8) * (1.0f / 16777216.0f); // 24 bits -> [0,1)
+            Frame[Channel] = (Uniform01 * 2.0f - 1.0f) * TestNoiseGain;
+        }
+    }
 }
 
 uint32_t AudioEngine::HandleHardwareOutputRequest(float* Interleaved, uint32_t Frames)
@@ -241,14 +328,26 @@ std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
                     InCommand.OutputDeviceName.c_str());
         }
     }
+    else if (InCommand.CommandOpcode == Opcode::SetSpeakerMute)
+    {
+        SharedLayout.SetSpeakerMuted(static_cast<SpeakerLayout::SpeakerChannel>(InCommand.SpeakerIndex),
+                                      InCommand.bMuted);
+    }
+    else if (InCommand.CommandOpcode == Opcode::SetTestNoise)
+    {
+        bTestNoiseEnabled.store(InCommand.bTestNoiseEnabled, std::memory_order_relaxed);
+    }
 
     Status OutStatus;
     OutStatus.Mode = Mode.load(std::memory_order_relaxed);
     OutStatus.OutputDeviceName = Output->GetTargetNodeName();
+    OutStatus.bTestNoiseEnabled = bTestNoiseEnabled.load(std::memory_order_relaxed);
     for (uint8_t i = 0; i < SpeakerCount; ++i)
     {
         OutStatus.SpeakerAzimuthDegrees[i] =
             SharedLayout.GetSpeakerAzimuth(static_cast<SpeakerLayout::SpeakerChannel>(i));
+        OutStatus.SpeakerMuted[i] =
+            SharedLayout.IsSpeakerMuted(static_cast<SpeakerLayout::SpeakerChannel>(i));
     }
     return EncodeStatusResponse(OutStatus);
 }
