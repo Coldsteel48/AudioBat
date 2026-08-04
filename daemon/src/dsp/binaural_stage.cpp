@@ -14,6 +14,8 @@
 #include <cstring>
 #include <numbers>
 
+#include "binaural_voice.hpp"
+#include "hrtf_gain_normalization.hpp"
 #include "synthetic_hrtf.hpp"
 
 namespace audiobat
@@ -56,6 +58,12 @@ enum SevenOneChannel : uint32_t
     SevenOneChannelCount = 8,
 };
 
+// Maps SpeakerLayout::SpeakerChannel index (0..6, non-LFE order FL,FR,FC,
+// RL,RR,SL,SR) to its frame offset within the 8-channel interleaved 7.1
+// layout above - used by the near-field path to de-interleave one source
+// at a time. Same mapping audio_engine.cpp keeps its own local copy of.
+constexpr uint32_t SpeakerToFrameIndex[SpeakerLayout::SpeakerCount] = {FL, FR, FC, RL, RR, SL, SR};
+
 // Prepends IntDelay zero samples to Taps, approximating the inter-aural
 // time difference libmysofa reports separately from the FIR itself with
 // an integer-sample delay. A future refinement could use a fractional
@@ -71,8 +79,10 @@ std::vector<float> BuildDelayedFilter(const std::vector<float>& Taps, float Dela
 } // namespace
 
 BinauralStage::BinauralStage(const SpeakerLayout& InLayout, HrtfSourceKind Kind, const std::string& SofaPath,
-                             float SampleRate)
-    : Layout(InLayout), FallbackStage(InLayout)
+                             float SampleRate, bool bInitialNearFieldEnabled)
+    : Layout(InLayout), FallbackStage(InLayout), SourceKind(Kind),
+      bNearFieldRequested(bInitialNearFieldEnabled), bNearFieldActive(bInitialNearFieldEnabled),
+      ToggleCrossfadeFrames(static_cast<uint32_t>(0.05f * SampleRate)) // ~50ms
 {
     for (uint32_t k = 0; k < VirtualSpeakerCount; ++k)
     {
@@ -162,7 +172,39 @@ BinauralStage::BinauralStage(const SpeakerLayout& InLayout, HrtfSourceKind Kind,
     }
     MixLeft.assign(MaxProcessFrames, 0.0f);
     MixRight.assign(MaxProcessFrames, 0.0f);
+
+    // --- Near-field path setup (additive) ---
+    // bHrtfLoaded is set above: true unconditionally for
+    // SyntheticSphericalHead, true/false for SofaFile depending on
+    // whether Hrtf.Open() succeeded - same condition that already governs
+    // whether the original path uses real HRTF data or falls back.
+    if (bHrtfLoaded)
+    {
+        NearFieldNormalizationGain = ComputeHrtfNormalizationGain(Kind, SofaPath, SampleRate);
+        const HrtfLoader* Source = Kind == HrtfSourceKind::SofaFile ? &Hrtf : nullptr;
+        for (uint32_t Speaker = 0; Speaker < SpeakerLayout::SpeakerCount; ++Speaker)
+        {
+            const auto Channel = static_cast<SpeakerLayout::SpeakerChannel>(Speaker);
+            const float AzimuthDegrees = Layout.GetSpeakerAzimuth(Channel);
+            const float DistanceMeters = Layout.GetSpeakerDistance(Channel);
+            Voices[Speaker] = std::make_unique<BinauralVoice>(Kind, Source, NearFieldNormalizationGain,
+                                                               AzimuthDegrees, DistanceMeters, SampleRate);
+        }
+    }
+    for (auto& Scratch : SourceScratch)
+    {
+        Scratch.assign(MaxProcessFrames, 0.0f);
+    }
+    VoiceScratch.assign(static_cast<size_t>(MaxProcessFrames) * 2, 0.0f);
+    OriginalPathScratch.assign(static_cast<size_t>(MaxProcessFrames) * 2, 0.0f);
+    NearFieldPathScratch.assign(static_cast<size_t>(MaxProcessFrames) * 2, 0.0f);
 }
+
+// See the declaration's comment: must be defined here, not defaulted
+// inline in the header, so Voices' array-of-unique_ptr<BinauralVoice>
+// destruction sees BinauralVoice's complete type (binaural_voice.hpp is
+// included above).
+BinauralStage::~BinauralStage() = default;
 
 void BinauralStage::Process(const float* Input, uint32_t InputChannels,
                              float* Output, uint32_t OutputChannels,
@@ -185,13 +227,63 @@ void BinauralStage::Process(const float* Input, uint32_t InputChannels,
         Frames = MaxProcessFrames; // defensive; AudioEngine already clamps to this bound
     }
 
+    // --- Near-field toggle dispatch (additive - see
+    // docs/near-field-distance-plan.md). With near-field never enabled,
+    // bNearFieldActive/bRequested are both permanently false and this
+    // whole block reduces to "call RenderOriginalPath every time", the
+    // same thing Process() did directly before this path existed.
+    const bool bRequested = bNearFieldRequested.load(std::memory_order_acquire);
+    if (ToggleFadeFramesRemaining == 0 && bRequested != bNearFieldActive)
+    {
+        bNearFieldActive = bRequested;
+        ToggleFadeFramesRemaining = ToggleCrossfadeFrames;
+    }
+
+    if (ToggleFadeFramesRemaining == 0)
+    {
+        if (bNearFieldActive)
+        {
+            RenderNearFieldPath(Input, Output, Frames);
+        }
+        else
+        {
+            RenderOriginalPath(Input, Output, Frames);
+        }
+        return;
+    }
+
+    RenderOriginalPath(Input, OriginalPathScratch.data(), Frames);
+    RenderNearFieldPath(Input, NearFieldPathScratch.data(), Frames);
+
+    const float* TargetPath = bNearFieldActive ? NearFieldPathScratch.data() : OriginalPathScratch.data();
+    const float* SourcePath = bNearFieldActive ? OriginalPathScratch.data() : NearFieldPathScratch.data();
+    for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
+    {
+        const float TargetGain =
+            1.0f - static_cast<float>(ToggleFadeFramesRemaining) / static_cast<float>(ToggleCrossfadeFrames);
+        const float SourceGain = 1.0f - TargetGain;
+
+        Output[FrameIndex * 2 + 0] =
+            SourcePath[FrameIndex * 2 + 0] * SourceGain + TargetPath[FrameIndex * 2 + 0] * TargetGain;
+        Output[FrameIndex * 2 + 1] =
+            SourcePath[FrameIndex * 2 + 1] * SourceGain + TargetPath[FrameIndex * 2 + 1] * TargetGain;
+
+        if (ToggleFadeFramesRemaining > 0)
+        {
+            --ToggleFadeFramesRemaining;
+        }
+    }
+}
+
+void BinauralStage::RenderOriginalPath(const float* Input, float* Output, uint32_t Frames)
+{
     // Snapshot live speaker positions once per block, not per sample -
     // they only change from control commands, never at audio rate.
     const SpeakerLayout::Directions Dirs = Layout.SnapshotDirections();
 
     for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
     {
-        const float* InFrame = Input + FrameIndex * InputChannels;
+        const float* InFrame = Input + FrameIndex * SevenOneChannelCount;
 
         const float Sources[SpeakerLayout::SpeakerCount] = {
             InFrame[FL], InFrame[FR], InFrame[FC], InFrame[RL], InFrame[RR], InFrame[SL], InFrame[SR],
@@ -217,10 +309,70 @@ void BinauralStage::Process(const float* Input, uint32_t InputChannels,
 
     for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
     {
-        const float* InFrame = Input + FrameIndex * InputChannels;
-        float* OutFrame = Output + FrameIndex * OutputChannels;
+        const float* InFrame = Input + FrameIndex * SevenOneChannelCount;
+        float* OutFrame = Output + FrameIndex * 2;
         OutFrame[0] = MixLeft[FrameIndex] + LfeGain * InFrame[LFE];
         OutFrame[1] = MixRight[FrameIndex] + LfeGain * InFrame[LFE];
+    }
+}
+
+void BinauralStage::RenderNearFieldPath(const float* Input, float* Output, uint32_t Frames)
+{
+    for (uint32_t Speaker = 0; Speaker < SpeakerLayout::SpeakerCount; ++Speaker)
+    {
+        const uint32_t ChannelIndex = SpeakerToFrameIndex[Speaker];
+        for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
+        {
+            SourceScratch[Speaker][FrameIndex] = Input[FrameIndex * SevenOneChannelCount + ChannelIndex];
+        }
+    }
+
+    std::fill_n(Output, static_cast<size_t>(Frames) * 2, 0.0f);
+    for (uint32_t Speaker = 0; Speaker < SpeakerLayout::SpeakerCount; ++Speaker)
+    {
+        if (!Voices[Speaker])
+        {
+            continue; // SofaFile failed to load - nothing to render for this speaker
+        }
+        Voices[Speaker]->Process(SourceScratch[Speaker].data(), VoiceScratch.data(), Frames);
+        for (uint32_t i = 0; i < Frames * 2; ++i)
+        {
+            Output[i] += VoiceScratch[i];
+        }
+    }
+
+    for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
+    {
+        const float* InFrame = Input + FrameIndex * SevenOneChannelCount;
+        Output[FrameIndex * 2 + 0] += LfeGain * InFrame[LFE];
+        Output[FrameIndex * 2 + 1] += LfeGain * InFrame[LFE];
+    }
+}
+
+void BinauralStage::SetNearFieldEnabled(bool bEnabled)
+{
+    bNearFieldRequested.store(bEnabled, std::memory_order_release);
+}
+
+void BinauralStage::RebuildVoiceForSpeaker(SpeakerLayout::SpeakerChannel Speaker, float AzimuthDegrees,
+                                           float DistanceMeters)
+{
+    if (!Voices[Speaker])
+    {
+        return; // SofaFile failed to load - nothing to rebuild
+    }
+    const HrtfLoader* Source = SourceKind == HrtfSourceKind::SofaFile ? &Hrtf : nullptr;
+    Voices[Speaker]->Rebuild(SourceKind, Source, NearFieldNormalizationGain, AzimuthDegrees, DistanceMeters);
+}
+
+void BinauralStage::CollectVoiceGarbage()
+{
+    for (auto& Voice : Voices)
+    {
+        if (Voice)
+        {
+            Voice->CollectGarbage();
+        }
     }
 }
 

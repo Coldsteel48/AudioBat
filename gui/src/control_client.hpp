@@ -44,6 +44,8 @@ public:
     std::optional<Status> RequestStatus();
     std::optional<Status> SetSpatialMode(SpatialMode Mode);
     std::optional<Status> SetSpeakerAzimuth(uint8_t SpeakerIndex, float AzimuthDegrees);
+    std::optional<Status> SetSpeakerDistance(uint8_t SpeakerIndex, float DistanceMeters);
+    std::optional<Status> SetNearFieldEnabled(bool bEnabled);
     std::optional<Status> ResetSpeakerPositions();
     std::optional<Status> SetOutputDevice(const std::string& DeviceName);
     std::optional<Status> SetSpeakerMute(uint8_t SpeakerIndex, bool bMuted);

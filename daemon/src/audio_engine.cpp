@@ -8,6 +8,7 @@
 
 #include "audio_engine.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -25,6 +26,7 @@
 #include "dsp/passthrough_stage.hpp"
 #include "hardware_output.hpp"
 #include "hrtf_default_path.hpp"
+#include "single_instance_lock.hpp"
 #include "virtual_sink.hpp"
 
 namespace audiobat
@@ -41,10 +43,10 @@ namespace
 // what AudioEngine will ever actually pass to Process().
 constexpr uint32_t MaxScratchFrames = MaxProcessFrames;
 
-// Hardcoded for now (Arctis 7P+ Analog Stereo, from `wpctl status` /
-// `pw-cli info <sink-id>`) - test-only target while the pipeline is being
-// validated. A future control-protocol command will let the user pick any
-// compatible stereo sink live instead of this being fixed at startup.
+// Hardcoded fallback (Arctis 7P+ Analog Stereo, from `wpctl status` /
+// `pw-cli info <sink-id>`), only used on first run before any output
+// device has ever been chosen via SetOutputDevice - see Run()'s
+// InitialOutputDevice, which prefers a persisted choice when one exists.
 constexpr const char* TestOutputNodeName = "alsa_output.usb-SteelSeries_Arctis_7P_-00.analog-stereo";
 
 // Raw 7.1 input channel order, matching the layout VirtualSink captures
@@ -111,6 +113,16 @@ std::vector<HrtfCatalogEntry> AudioEngine::BuildHrtfCatalog()
 
 int AudioEngine::Run()
 {
+    const std::string SocketPath = DefaultControlSocketPath();
+    const std::string LockPath = SocketPath.substr(0, SocketPath.find_last_of('/')) + "/daemon.lock";
+    InstanceLock = std::make_unique<SingleInstanceLock>(LockPath);
+    if (!InstanceLock->TryAcquire())
+    {
+        fprintf(stderr, "[audiobatd] another instance is already running (pid %s), exiting\n",
+                InstanceLock->HolderPid().empty() ? "unknown" : InstanceLock->HolderPid().c_str());
+        return 1;
+    }
+
     pw_init(nullptr, nullptr);
     bPipeWireInitialized = true;
 
@@ -141,27 +153,71 @@ int AudioEngine::Run()
     OffStage = std::make_unique<PassthroughStage>();
     BasicStage = std::make_unique<AmbisonicsStage>(SharedLayout);
 
+    // Restores whatever the user last chose via the control protocol (mode,
+    // speaker layout, near-field toggle) - see settings_store.hpp. Applied
+    // to SharedLayout before AdvancedStage is constructed below, since
+    // BinauralStage reads speaker azimuth/distance directly from it at
+    // construction time rather than picking them up later.
+    const std::optional<PersistedSettings> LoadedSettings = Settings.Load();
+    if (LoadedSettings)
+    {
+        Mode.store(LoadedSettings->Mode, std::memory_order_relaxed);
+        bNearFieldEnabled.store(LoadedSettings->bNearFieldEnabled, std::memory_order_relaxed);
+        for (uint8_t i = 0; i < SpeakerCount; ++i)
+        {
+            const auto Channel = static_cast<SpeakerLayout::SpeakerChannel>(i);
+            SharedLayout.SetSpeakerAzimuth(Channel, LoadedSettings->SpeakerAzimuthDegrees[i]);
+            SharedLayout.SetSpeakerDistance(Channel, LoadedSettings->SpeakerDistanceMeters[i]);
+            SharedLayout.SetSpeakerMuted(Channel, LoadedSettings->SpeakerMuted[i]);
+        }
+        fprintf(stderr, "[audiobatd] restored settings from previous session\n");
+    }
+
     RuntimeHrtfCatalog = BuildHrtfCatalog();
 
     // ResolveHrtfSofaPath() (AUDIOBAT_HRTF_SOFA or the bundled default)
-    // picks the initial HRTF source, same as before this catalog existed.
+    // picks the initial HRTF source unless a persisted choice overrides it
+    // below. AUDIOBAT_HRTF_SOFA is a lower-level dev/testing override (see
+    // its doc comment) so it always wins over a persisted choice when set.
+    std::string InitialSofaPath = ResolveHrtfSofaPath();
+    HrtfSourceKind InitialHrtfKind = HrtfSourceKind::SofaFile;
+
+    bool bAppliedPersistedHrtfChoice = false;
+    if (!std::getenv("AUDIOBAT_HRTF_SOFA") && LoadedSettings && !LoadedSettings->ActiveHrtfDisplayName.empty())
+    {
+        for (size_t i = 0; i < RuntimeHrtfCatalog.size(); ++i)
+        {
+            if (LoadedSettings->ActiveHrtfDisplayName == RuntimeHrtfCatalog[i].DisplayName)
+            {
+                InitialSofaPath = RuntimeHrtfCatalog[i].Path;
+                InitialHrtfKind = RuntimeHrtfCatalog[i].Kind;
+                ActiveHrtfIndex.store(static_cast<uint8_t>(i), std::memory_order_relaxed);
+                bAppliedPersistedHrtfChoice = true;
+                break;
+            }
+        }
+    }
+
     // If it happens to match a catalog entry, report that entry as active
     // so the GUI's dropdown starts in sync; otherwise ActiveHrtfIndex just
     // stays at its 0 default, since an env-var override sits outside the
     // catalog entirely (see ResolveHrtfSofaPath's comment).
-    const std::string InitialSofaPath = ResolveHrtfSofaPath();
-    for (size_t i = 0; i < RuntimeHrtfCatalog.size(); ++i)
+    if (!bAppliedPersistedHrtfChoice)
     {
-        if (RuntimeHrtfCatalog[i].Kind == HrtfSourceKind::SofaFile &&
-            InitialSofaPath == RuntimeHrtfCatalog[i].Path)
+        for (size_t i = 0; i < RuntimeHrtfCatalog.size(); ++i)
         {
-            ActiveHrtfIndex.store(static_cast<uint8_t>(i), std::memory_order_relaxed);
-            break;
+            if (RuntimeHrtfCatalog[i].Kind == HrtfSourceKind::SofaFile &&
+                InitialSofaPath == RuntimeHrtfCatalog[i].Path)
+            {
+                ActiveHrtfIndex.store(static_cast<uint8_t>(i), std::memory_order_relaxed);
+                break;
+            }
         }
     }
 
-    AdvancedStage = std::make_unique<HrtfDeck>(SharedLayout, HrtfSourceKind::SofaFile, InitialSofaPath,
-                                                static_cast<float>(HardwareOutput::SampleRate));
+    AdvancedStage = std::make_unique<HrtfDeck>(SharedLayout, InitialHrtfKind, InitialSofaPath,
+                                                static_cast<float>(HardwareOutput::SampleRate),
+                                                bNearFieldEnabled.load(std::memory_order_relaxed));
 
     Sink = std::make_unique<VirtualSink>(Loop);
     Sink->SetAudioCallback(
@@ -175,7 +231,14 @@ int AudioEngine::Run()
         return 1;
     }
 
-    Output = std::make_unique<HardwareOutput>(Loop, TestOutputNodeName);
+    // A persisted output device choice overrides the hardcoded test target
+    // above (see TestOutputNodeName's own comment - this is the "future
+    // control-protocol command" it refers to, now that SetOutputDevice
+    // exists and is remembered).
+    const std::string InitialOutputDevice =
+        (LoadedSettings && !LoadedSettings->OutputDeviceName.empty()) ? LoadedSettings->OutputDeviceName
+                                                                       : TestOutputNodeName;
+    Output = std::make_unique<HardwareOutput>(Loop, InitialOutputDevice);
     Output->SetFillCallback(
         [this](float* Interleaved, uint32_t Frames)
         {
@@ -194,7 +257,7 @@ int AudioEngine::Run()
         return 1;
     }
 
-    Server = std::make_unique<ControlServer>(DefaultControlSocketPath());
+    Server = std::make_unique<ControlServer>(SocketPath);
     Server->SetCommandHandler(
         [this](const Command& InCommand)
         {
@@ -279,6 +342,7 @@ void AudioEngine::HandleVirtualSinkAudio(const float* Interleaved, uint32_t Fram
         std::memcpy(InputScratch.data(), Interleaved, sizeof(float) * Frames * VirtualSink::Channels);
     }
     ApplySpeakerMute(InputScratch.data(), Frames);
+    ApplyNearFieldLoudnessFalloff(InputScratch.data(), Frames);
 
     ActiveStage().Process(InputScratch.data(), VirtualSink::Channels, DspScratch.data(),
                            HardwareOutput::Channels, Frames);
@@ -308,6 +372,30 @@ void AudioEngine::ApplySpeakerMute(float* Interleaved, uint32_t Frames)
             {
                 Frame[SpeakerToFrameIndex[Speaker]] = 0.0f;
             }
+        }
+    }
+}
+
+void AudioEngine::ApplyNearFieldLoudnessFalloff(float* Interleaved, uint32_t Frames)
+{
+    if (!bNearFieldEnabled.load(std::memory_order_relaxed))
+    {
+        return;
+    }
+
+    float Gains[SpeakerCount];
+    for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
+    {
+        const float Distance = SharedLayout.GetSpeakerDistance(static_cast<SpeakerLayout::SpeakerChannel>(Speaker));
+        Gains[Speaker] = ReferenceSpeakerDistanceMeters / std::max(Distance, MinSpeakerDistanceMeters);
+    }
+
+    for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
+    {
+        float* Frame = Interleaved + FrameIndex * VirtualSink::Channels;
+        for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
+        {
+            Frame[SpeakerToFrameIndex[Speaker]] *= Gains[Speaker];
         }
     }
 }
@@ -366,22 +454,59 @@ std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
         return EncodeHrtfCatalogResponse(DisplayNames);
     }
 
+    // Set whenever this command changes state PersistedSettings tracks, so
+    // it gets saved to disk below. Left false for read-only commands
+    // (GetStatus and the two early-returned Get* above) and for
+    // SetTestNoise, which is deliberately not persisted - see
+    // PersistedSettings' doc comment.
+    bool bPersistedStateChanged = false;
+
     if (InCommand.CommandOpcode == Opcode::SetSpatialMode)
     {
         Mode.store(InCommand.ModeValue, std::memory_order_relaxed);
+        bPersistedStateChanged = true;
         fprintf(stderr, "[audiobatd] spatial mode set to %d\n", static_cast<int>(InCommand.ModeValue));
     }
     else if (InCommand.CommandOpcode == Opcode::SetSpeakerAzimuth)
     {
-        SharedLayout.SetSpeakerAzimuth(
-            static_cast<SpeakerLayout::SpeakerChannel>(InCommand.SpeakerIndex), InCommand.AzimuthDegrees);
+        const auto Channel = static_cast<SpeakerLayout::SpeakerChannel>(InCommand.SpeakerIndex);
+        SharedLayout.SetSpeakerAzimuth(Channel, InCommand.AzimuthDegrees);
+        bPersistedStateChanged = true;
+        // Keeps the near-field path's per-voice filter in sync with live
+        // repositioning regardless of whether that mode is currently on,
+        // so it's never stale by the time someone switches it on - see
+        // BinauralStage::RebuildVoiceForSpeaker's doc comment.
+        AdvancedStage->RebuildVoiceForSpeaker(Channel, InCommand.AzimuthDegrees,
+                                               SharedLayout.GetSpeakerDistance(Channel));
+    }
+    else if (InCommand.CommandOpcode == Opcode::SetSpeakerDistance)
+    {
+        const auto Channel = static_cast<SpeakerLayout::SpeakerChannel>(InCommand.SpeakerIndex);
+        SharedLayout.SetSpeakerDistance(Channel, InCommand.DistanceMeters);
+        bPersistedStateChanged = true;
+        AdvancedStage->RebuildVoiceForSpeaker(Channel, SharedLayout.GetSpeakerAzimuth(Channel),
+                                               InCommand.DistanceMeters);
+    }
+    else if (InCommand.CommandOpcode == Opcode::SetNearFieldEnabled)
+    {
+        bNearFieldEnabled.store(InCommand.bNearFieldEnabled, std::memory_order_relaxed);
+        bPersistedStateChanged = true;
+        AdvancedStage->SetNearFieldEnabled(InCommand.bNearFieldEnabled);
     }
     else if (InCommand.CommandOpcode == Opcode::ResetSpeakerPositions)
     {
-        SharedLayout.ResetSpeakerAzimuths();
+        SharedLayout.ResetSpeakerPositions();
+        bPersistedStateChanged = true;
+        for (uint8_t i = 0; i < SpeakerCount; ++i)
+        {
+            const auto Channel = static_cast<SpeakerLayout::SpeakerChannel>(i);
+            AdvancedStage->RebuildVoiceForSpeaker(Channel, SharedLayout.GetSpeakerAzimuth(Channel),
+                                                   SharedLayout.GetSpeakerDistance(Channel));
+        }
     }
     else if (InCommand.CommandOpcode == Opcode::SetOutputDevice)
     {
+        bPersistedStateChanged = true;
         if (!Output->SetTargetNode(InCommand.OutputDeviceName))
         {
             fprintf(stderr, "[audiobatd] failed to switch output device to %s\n",
@@ -392,6 +517,7 @@ std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
     {
         SharedLayout.SetSpeakerMuted(static_cast<SpeakerLayout::SpeakerChannel>(InCommand.SpeakerIndex),
                                       InCommand.bMuted);
+        bPersistedStateChanged = true;
     }
     else if (InCommand.CommandOpcode == Opcode::SetTestNoise)
     {
@@ -407,6 +533,7 @@ std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
             const HrtfCatalogEntry& Entry = RuntimeHrtfCatalog[InCommand.HrtfIndex];
             AdvancedStage->SwitchTo(Entry.Kind, Entry.Path);
             ActiveHrtfIndex.store(InCommand.HrtfIndex, std::memory_order_relaxed);
+            bPersistedStateChanged = true;
             fprintf(stderr, "[audiobatd] HRTF source switched to '%s'\n", Entry.DisplayName);
         }
         else
@@ -421,14 +548,39 @@ std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
     OutStatus.OutputDeviceName = Output->GetTargetNodeName();
     OutStatus.bTestNoiseEnabled = bTestNoiseEnabled.load(std::memory_order_relaxed);
     OutStatus.ActiveHrtfIndex = ActiveHrtfIndex.load(std::memory_order_relaxed);
+    OutStatus.bNearFieldEnabled = bNearFieldEnabled.load(std::memory_order_relaxed);
     for (uint8_t i = 0; i < SpeakerCount; ++i)
     {
         OutStatus.SpeakerAzimuthDegrees[i] =
             SharedLayout.GetSpeakerAzimuth(static_cast<SpeakerLayout::SpeakerChannel>(i));
         OutStatus.SpeakerMuted[i] =
             SharedLayout.IsSpeakerMuted(static_cast<SpeakerLayout::SpeakerChannel>(i));
+        OutStatus.SpeakerDistanceMeters[i] =
+            SharedLayout.GetSpeakerDistance(static_cast<SpeakerLayout::SpeakerChannel>(i));
     }
+
+    if (bPersistedStateChanged)
+    {
+        PersistCurrentSettings(OutStatus);
+    }
+
     return EncodeStatusResponse(OutStatus);
+}
+
+void AudioEngine::PersistCurrentSettings(const Status& CurrentStatus)
+{
+    PersistedSettings ToSave;
+    ToSave.Mode = CurrentStatus.Mode;
+    ToSave.SpeakerAzimuthDegrees = CurrentStatus.SpeakerAzimuthDegrees;
+    ToSave.SpeakerDistanceMeters = CurrentStatus.SpeakerDistanceMeters;
+    ToSave.SpeakerMuted = CurrentStatus.SpeakerMuted;
+    ToSave.bNearFieldEnabled = CurrentStatus.bNearFieldEnabled;
+    ToSave.OutputDeviceName = CurrentStatus.OutputDeviceName;
+    if (CurrentStatus.ActiveHrtfIndex < RuntimeHrtfCatalog.size())
+    {
+        ToSave.ActiveHrtfDisplayName = RuntimeHrtfCatalog[CurrentStatus.ActiveHrtfIndex].DisplayName;
+    }
+    Settings.Save(ToSave);
 }
 
 } // namespace audiobat

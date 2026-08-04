@@ -46,7 +46,7 @@ add_executable(audiobat-gui
     src/main.cpp
     src/app.cpp
     src/control_client.cpp
-    src/azimuth_dial.cpp
+    src/position_dial.cpp
     src/renderer_opengl3.cpp
 )
 

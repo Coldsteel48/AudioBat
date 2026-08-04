@@ -8,6 +8,7 @@
 
 #include "speaker_layout.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <numbers>
 
@@ -26,7 +27,7 @@ constexpr float DegToRad = std::numbers::pi_v<float> / 180.0f;
 
 // Default ITU-ish 7.1 speaker layout, indexed by SpeakerChannel. 0 = front,
 // positive = left, negative = right. Shared by the constructor and
-// ResetSpeakerAzimuths() so the two can't drift apart.
+// ResetSpeakerPositions() so the two can't drift apart.
 constexpr std::array<float, SpeakerLayout::SpeakerCount> DefaultSpeakerAzimuthDegrees = {
     30.0f, -30.0f, 0.0f, 135.0f, -135.0f, 90.0f, -90.0f,
 };
@@ -35,7 +36,7 @@ constexpr std::array<float, SpeakerLayout::SpeakerCount> DefaultSpeakerAzimuthDe
 
 SpeakerLayout::SpeakerLayout()
 {
-    ResetSpeakerAzimuths();
+    ResetSpeakerPositions();
 }
 
 void SpeakerLayout::SetSpeakerAzimuth(SpeakerChannel Speaker, float AzimuthDegrees)
@@ -48,6 +49,17 @@ float SpeakerLayout::GetSpeakerAzimuth(SpeakerChannel Speaker) const
     return SpeakerAzimuthDegrees[Speaker].load(std::memory_order_relaxed);
 }
 
+void SpeakerLayout::SetSpeakerDistance(SpeakerChannel Speaker, float DistanceMeters)
+{
+    const float Clamped = std::clamp(DistanceMeters, MinSpeakerDistanceMeters, MaxSpeakerDistanceMeters);
+    SpeakerDistanceMeters[Speaker].store(Clamped, std::memory_order_relaxed);
+}
+
+float SpeakerLayout::GetSpeakerDistance(SpeakerChannel Speaker) const
+{
+    return SpeakerDistanceMeters[Speaker].load(std::memory_order_relaxed);
+}
+
 void SpeakerLayout::SetSpeakerMuted(SpeakerChannel Speaker, bool bMuted)
 {
     SpeakerMuted[Speaker].store(bMuted, std::memory_order_relaxed);
@@ -58,11 +70,12 @@ bool SpeakerLayout::IsSpeakerMuted(SpeakerChannel Speaker) const
     return SpeakerMuted[Speaker].load(std::memory_order_relaxed);
 }
 
-void SpeakerLayout::ResetSpeakerAzimuths()
+void SpeakerLayout::ResetSpeakerPositions()
 {
     for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
     {
         SpeakerAzimuthDegrees[Speaker].store(DefaultSpeakerAzimuthDegrees[Speaker], std::memory_order_relaxed);
+        SpeakerDistanceMeters[Speaker].store(DefaultSpeakerDistanceMeters, std::memory_order_relaxed);
     }
 }
 

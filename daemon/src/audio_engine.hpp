@@ -17,6 +17,7 @@
 #include "audiobat/ring_buffer.hpp"
 #include "dsp/speaker_layout.hpp"
 #include "hrtf_catalog.hpp"
+#include "settings_store.hpp"
 
 struct pw_main_loop;
 struct pw_loop;
@@ -32,6 +33,7 @@ class AmbisonicsStage;
 class HrtfDeck;
 class ControlServer;
 class DeviceRegistry;
+class SingleInstanceLock;
 
 // Owns the whole daemon pipeline: PipeWire main loop, the virtual sink
 // (capture), the DSP stages, the hardware output (playback), and the
@@ -71,11 +73,25 @@ private:
     uint32_t HandleHardwareOutputRequest(float* Interleaved, uint32_t Frames);
     std::vector<uint8_t> HandleControlCommand(const Command& InCommand);
 
+    // Saves CurrentStatus (as returned to the control client) plus the
+    // HRTF display name it maps to via RuntimeHrtfCatalog. Called from
+    // HandleControlCommand() after any command that changes persisted
+    // state - see PersistedSettings for what's included.
+    void PersistCurrentSettings(const Status& CurrentStatus);
+
     // Zeroes out the non-LFE channels of any currently-muted speaker
     // in-place. Snapshots mute flags once per block, same pattern as
     // SpeakerLayout::SnapshotDirections - mute state only changes from
     // control commands, never at audio rate.
     void ApplySpeakerMute(float* Interleaved, uint32_t Frames);
+
+    // Scales each non-LFE channel by an inverse-distance loudness falloff
+    // (1.0 at ReferenceSpeakerDistanceMeters, louder when closer, quieter
+    // when farther) when near-field mode is on; a no-op otherwise. Applies
+    // in every spatial mode (unlike the near-field ILD filter, which is
+    // Advanced-only inside BinauralStage) since it's just a gain, no
+    // per-ear meaning required - see docs/near-field-distance-plan.md.
+    void ApplyNearFieldLoudnessFalloff(float* Interleaved, uint32_t Frames);
 
     // Fills Interleaved with decorrelated white noise on every non-LFE
     // channel (LFE stays silent), for speaker-calibration purposes:
@@ -104,14 +120,25 @@ private:
     pw_main_loop* MainLoop = nullptr;
     pw_loop* Loop = nullptr;
 
+    // Acquired first, before anything PipeWire-related, so a second
+    // instance refuses to start rather than creating a duplicate virtual
+    // sink. See single_instance_lock.hpp.
+    std::unique_ptr<SingleInstanceLock> InstanceLock;
+
     std::unique_ptr<VirtualSink> Sink;
     std::unique_ptr<HardwareOutput> Output;
     std::unique_ptr<ControlServer> Server;
     std::unique_ptr<DeviceRegistry> Devices;
 
+    // Loaded once at startup (Run()) to seed initial state below, and
+    // saved to after any control command that changes persisted state -
+    // see PersistCurrentSettings().
+    SettingsStore Settings;
+
     SpeakerLayout SharedLayout;
     std::atomic<SpatialMode> Mode{SpatialMode::Off};
     std::atomic<bool> bTestNoiseEnabled{false};
+    std::atomic<bool> bNearFieldEnabled{false};
 
     // State for FillTestNoise()'s xorshift32 PRNG; advanced once per
     // generated sample. Only ever touched from the realtime audio thread.

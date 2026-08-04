@@ -12,6 +12,8 @@
 #include <atomic>
 #include <cstdint>
 
+#include "audiobat/protocol.hpp"
+
 namespace audiobat
 {
 
@@ -45,6 +47,14 @@ public:
     void SetSpeakerAzimuth(SpeakerChannel Speaker, float AzimuthDegrees);
     float GetSpeakerAzimuth(SpeakerChannel Speaker) const;
 
+    // Sets a virtual speaker's distance from the head, in meters; safe to
+    // call from any thread. Clamped to [MinSpeakerDistanceMeters,
+    // MaxSpeakerDistanceMeters]. Always settable regardless of whether
+    // near-field mode is on - see SetNearFieldEnabled in AudioEngine -
+    // it just has no audible effect while off.
+    void SetSpeakerDistance(SpeakerChannel Speaker, float DistanceMeters);
+    float GetSpeakerDistance(SpeakerChannel Speaker) const;
+
     // Mutes/unmutes a virtual speaker live; safe to call from any thread.
     // AudioEngine zeroes a muted speaker's source signal before it's
     // encoded into the shared field, so muting is independent of which
@@ -52,9 +62,9 @@ public:
     void SetSpeakerMuted(SpeakerChannel Speaker, bool bMuted);
     bool IsSpeakerMuted(SpeakerChannel Speaker) const;
 
-    // Restores all 7 speakers to the default ITU-ish layout; safe to call
-    // from any thread, same as SetSpeakerAzimuth.
-    void ResetSpeakerAzimuths();
+    // Restores all 7 speakers to the default ITU-ish azimuths and default
+    // distance; safe to call from any thread, same as SetSpeakerAzimuth.
+    void ResetSpeakerPositions();
 
     // Per-speaker direction cosines/sines, snapshotted once per audio block
     // (not per sample - azimuths only change from control commands, never
@@ -76,6 +86,7 @@ public:
 
 private:
     std::array<std::atomic<float>, SpeakerCount> SpeakerAzimuthDegrees;
+    std::array<std::atomic<float>, SpeakerCount> SpeakerDistanceMeters;
     std::array<std::atomic<bool>, SpeakerCount> SpeakerMuted{};
 };
 

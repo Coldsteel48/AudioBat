@@ -6,8 +6,9 @@
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
 
-#include "azimuth_dial.hpp"
+#include "position_dial.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 #include "imgui.h"
@@ -21,6 +22,12 @@ constexpr float DialSize = 220.0f;
 constexpr float HandleRadius = 9.0f;
 constexpr float Pi = 3.14159265358979323846f;
 constexpr const char* SpeakerLabels[SpeakerCount] = {"FL", "FR", "FC", "RL", "RR", "SL", "SR"};
+
+// The closest distance (MinSpeakerDistanceMeters) maps to this fraction of
+// the dial's outer radius rather than to the exact center - keeps handles
+// clickable/draggable even at minimum distance and keeps azimuth (which is
+// meaningless exactly at the center) always well-defined.
+constexpr float InnerRadiusFraction = 0.25f;
 
 // Screen-space direction for a given azimuth: 0=front(up), positive=left,
 // negative=right, viewed top-down.
@@ -40,13 +47,40 @@ float ScreenPosToAzimuth(ImVec2 Center, ImVec2 Pos)
     }
     return atan2f(-Dx, -Dy) * (180.0f / Pi);
 }
+
+float Lerp(float A, float B, float T)
+{
+    return A + (B - A) * T;
+}
+
+float InverseLerp(float A, float B, float V)
+{
+    return (V - A) / (B - A);
+}
+
+// Maps a distance in meters to a pixel radius within [InnerRadiusPx,
+// OuterRadiusPx].
+float DistanceToPixelRadius(float DistanceMeters, float InnerRadiusPx, float OuterRadiusPx)
+{
+    const float Clamped = std::clamp(DistanceMeters, MinSpeakerDistanceMeters, MaxSpeakerDistanceMeters);
+    const float T = InverseLerp(MinSpeakerDistanceMeters, MaxSpeakerDistanceMeters, Clamped);
+    return Lerp(InnerRadiusPx, OuterRadiusPx, T);
+}
+
+float PixelRadiusToDistance(float RadiusPx, float InnerRadiusPx, float OuterRadiusPx)
+{
+    const float Clamped = std::clamp(RadiusPx, InnerRadiusPx, OuterRadiusPx);
+    const float T = InverseLerp(InnerRadiusPx, OuterRadiusPx, Clamped);
+    return Lerp(MinSpeakerDistanceMeters, MaxSpeakerDistanceMeters, T);
+}
 } // namespace
 
-bool DrawAzimuthDial(const char* Label, std::array<float, SpeakerCount>& AzimuthsDegrees,
-                      const std::array<bool, SpeakerCount>& Muted, int* OutChangedAzimuthIndex,
+bool DrawPositionDial(const char* Label, std::array<float, SpeakerCount>& AzimuthsDegrees,
+                      std::array<float, SpeakerCount>& DistancesMeters,
+                      const std::array<bool, SpeakerCount>& Muted, int* OutChangedIndex,
                       int* OutMuteToggledIndex, int* OutSoloIndex, float Scale)
 {
-    *OutChangedAzimuthIndex = -1;
+    *OutChangedIndex = -1;
     *OutMuteToggledIndex = -1;
     *OutSoloIndex = -1;
 
@@ -61,11 +95,14 @@ bool DrawAzimuthDial(const char* Label, std::array<float, SpeakerCount>& Azimuth
 
     const ImVec2 Origin = ImGui::GetCursorScreenPos();
     const ImVec2 Center(Origin.x + ScaledDialSize * 0.5f, Origin.y + ScaledDialSize * 0.5f);
-    const float Radius = ScaledDialSize * 0.5f - ScaledHandleRadius - 4.0f * Scale;
+    const float OuterRadiusPx = ScaledDialSize * 0.5f - ScaledHandleRadius - 4.0f * Scale;
+    const float InnerRadiusPx = OuterRadiusPx * InnerRadiusFraction;
 
-    DrawList->AddCircle(Center, Radius, IM_COL32(120, 120, 135, 255), 64, 1.5f * Scale);
-    DrawList->AddLine(Center, ImVec2(Center.x, Center.y - Radius), IM_COL32(90, 200, 255, 180), 2.0f * Scale);
-    DrawList->AddText(ImVec2(Center.x - 18.0f * Scale, Center.y - Radius - 18.0f * Scale),
+    DrawList->AddCircle(Center, OuterRadiusPx, IM_COL32(120, 120, 135, 255), 64, 1.5f * Scale);
+    DrawList->AddCircle(Center, InnerRadiusPx, IM_COL32(80, 80, 92, 200), 64, 1.0f * Scale);
+    DrawList->AddLine(Center, ImVec2(Center.x, Center.y - OuterRadiusPx), IM_COL32(90, 200, 255, 180),
+                       2.0f * Scale);
+    DrawList->AddText(ImVec2(Center.x - 18.0f * Scale, Center.y - OuterRadiusPx - 18.0f * Scale),
                        IM_COL32(180, 190, 200, 255), "FRONT");
 
     bool bChanged = false;
@@ -74,7 +111,9 @@ bool DrawAzimuthDial(const char* Label, std::array<float, SpeakerCount>& Azimuth
         ImGui::PushID(static_cast<int>(i));
 
         const ImVec2 Direction = AzimuthToUnitVector(AzimuthsDegrees[i]);
-        const ImVec2 HandlePos(Center.x + Radius * Direction.x, Center.y + Radius * Direction.y);
+        const float HandlePixelRadius = DistanceToPixelRadius(DistancesMeters[i], InnerRadiusPx, OuterRadiusPx);
+        const ImVec2 HandlePos(Center.x + HandlePixelRadius * Direction.x,
+                                Center.y + HandlePixelRadius * Direction.y);
 
         ImGui::SetCursorScreenPos(ImVec2(HandlePos.x - ScaledHandleRadius, HandlePos.y - ScaledHandleRadius));
         ImGui::InvisibleButton("handle", ImVec2(ScaledHandleRadius * 2.0f, ScaledHandleRadius * 2.0f));
@@ -84,8 +123,12 @@ bool DrawAzimuthDial(const char* Label, std::array<float, SpeakerCount>& Azimuth
         if (bActive)
         {
             AzimuthsDegrees[i] = ScreenPosToAzimuth(Center, IO.MousePos);
+            const float Dx = IO.MousePos.x - Center.x;
+            const float Dy = IO.MousePos.y - Center.y;
+            const float DragPixelRadius = std::sqrt(Dx * Dx + Dy * Dy);
+            DistancesMeters[i] = PixelRadiusToDistance(DragPixelRadius, InnerRadiusPx, OuterRadiusPx);
             bChanged = true;
-            *OutChangedAzimuthIndex = static_cast<int>(i);
+            *OutChangedIndex = static_cast<int>(i);
         }
 
         const bool bIsMuted = Muted[i];
@@ -116,7 +159,8 @@ bool DrawAzimuthDial(const char* Label, std::array<float, SpeakerCount>& Azimuth
         }
         if (bLabelHovered)
         {
-            ImGui::SetTooltip("Click: mute/unmute %s\nCtrl+click: solo %s (mute all others)",
+            ImGui::SetTooltip("Click: mute/unmute %s\nCtrl+click: solo %s (mute all others)\nDrag: azimuth "
+                               "(angle) + distance (radius)",
                                SpeakerLabels[i], SpeakerLabels[i]);
         }
 

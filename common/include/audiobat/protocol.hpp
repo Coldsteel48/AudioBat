@@ -45,6 +45,8 @@ enum class Opcode : uint8_t
     SetTestNoise = 0x08,
     GetHrtfCatalog = 0x09,
     SetHrtfFile = 0x0A,
+    SetSpeakerDistance = 0x0B,
+    SetNearFieldEnabled = 0x0C,
     // Responses
     StatusResponse = 0x81,
     ErrorResponse = 0x82,
@@ -77,17 +79,39 @@ inline constexpr size_t MaxPayloadSize = 4096;
 // AmbisonicsStage::SpeakerChannel's non-LFE channel order (FL,FR,FC,RL,RR,SL,SR).
 inline constexpr size_t SpeakerCount = 7;
 
+// Per-speaker distance range, in meters, shared by SpeakerLayout (daemon,
+// which clamps to this range) and the GUI's position dial (which maps it
+// to a pixel radius) - only meaningful when near-field mode is enabled
+// (see SetNearFieldEnabled), but the value itself is always settable so a
+// speaker can be positioned before switching that on. Floor is kept well
+// above the ~0.0875m physical head radius used by the near-field model
+// (daemon/src/dsp/synthetic_hrtf.cpp) so that model stays numerically
+// well-behaved; ceiling is where the near-field/loudness-falloff effect
+// becomes negligible.
+inline constexpr float MinSpeakerDistanceMeters = 0.3f;
+inline constexpr float MaxSpeakerDistanceMeters = 3.0f;
+inline constexpr float DefaultSpeakerDistanceMeters = 1.5f;
+
+// Distance at which near-field mode's loudness falloff and ILD correction
+// are both exactly a no-op (1.0 gain) - roughly where HRTF measurements
+// are typically made, and shared between AudioEngine's loudness falloff
+// and near_field_filter.cpp's ILD shelf so both agree on what "no
+// correction" means.
+inline constexpr float ReferenceSpeakerDistanceMeters = 1.0f;
+
 // Command decoded from a request message.
 struct Command
 {
     Opcode CommandOpcode = Opcode::GetStatus;
     SpatialMode ModeValue = SpatialMode::Off; // valid when CommandOpcode == SetSpatialMode
-    uint8_t SpeakerIndex = 0;     // valid when CommandOpcode == SetSpeakerAzimuth or SetSpeakerMute, 0..SpeakerCount-1
+    uint8_t SpeakerIndex = 0;     // valid when CommandOpcode == SetSpeakerAzimuth, SetSpeakerMute, or SetSpeakerDistance, 0..SpeakerCount-1
     float AzimuthDegrees = 0.0f;  // valid when CommandOpcode == SetSpeakerAzimuth
     bool bMuted = false;          // valid when CommandOpcode == SetSpeakerMute
     bool bTestNoiseEnabled = false; // valid when CommandOpcode == SetTestNoise
     std::string OutputDeviceName; // valid when CommandOpcode == SetOutputDevice
     uint8_t HrtfIndex = 0;         // valid when CommandOpcode == SetHrtfFile
+    float DistanceMeters = 0.0f;  // valid when CommandOpcode == SetSpeakerDistance
+    bool bNearFieldEnabled = false; // valid when CommandOpcode == SetNearFieldEnabled
 };
 
 struct Status
@@ -98,6 +122,8 @@ struct Status
     bool bTestNoiseEnabled = false;
     std::string OutputDeviceName; // node.name of the currently pinned hardware output sink
     uint8_t ActiveHrtfIndex = 0;  // index into the GetHrtfCatalog list Advanced mode is rendering through
+    std::array<float, SpeakerCount> SpeakerDistanceMeters{};
+    bool bNearFieldEnabled = false; // whether distance affects loudness (all modes) and ILD (Advanced mode)
 };
 
 // A real hardware playback sink the daemon can pin HardwareOutput to.
@@ -171,6 +197,8 @@ std::vector<uint8_t> EncodeSetSpeakerMuteRequest(uint8_t SpeakerIndex, bool bMut
 std::vector<uint8_t> EncodeSetTestNoiseRequest(bool bEnabled);
 std::vector<uint8_t> EncodeGetHrtfCatalogRequest();
 std::vector<uint8_t> EncodeSetHrtfFileRequest(uint8_t HrtfIndex);
+std::vector<uint8_t> EncodeSetSpeakerDistanceRequest(uint8_t SpeakerIndex, float DistanceMeters);
+std::vector<uint8_t> EncodeSetNearFieldEnabledRequest(bool bEnabled);
 
 // Resolves the default control socket path: $XDG_RUNTIME_DIR/audiobat/control.sock,
 // falling back to /tmp/audiobat-<uid>/control.sock if XDG_RUNTIME_DIR isn't set.
