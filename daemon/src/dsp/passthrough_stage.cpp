@@ -18,7 +18,7 @@ namespace
 
 // 7.1 channel order used throughout the pipeline (matches the SPA channel
 // positions set on the virtual sink stream).
-enum SevenOneChannel : uint32_t
+enum SevenOneChannel : uint32
 {
     FL = 0,
     FR = 1,
@@ -37,9 +37,9 @@ constexpr float LfeGain = 0.5f;
 
 } // namespace
 
-void PassthroughStage::Process(const float* Input, uint32_t InputChannels,
-                                float* Output, uint32_t OutputChannels,
-                                uint32_t Frames)
+void PassthroughStage::Process(const float* Input, uint32 InputChannels,
+                                float* Output, uint32 OutputChannels,
+                                uint32 Frames)
 {
     if (InputChannels != SevenOneChannelCount || OutputChannels != 2)
     {
@@ -49,7 +49,7 @@ void PassthroughStage::Process(const float* Input, uint32_t InputChannels,
         return;
     }
 
-    for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
+    for (uint32 FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
     {
         const float* InFrame = Input + FrameIndex * InputChannels;
         float* OutFrame = Output + FrameIndex * OutputChannels;

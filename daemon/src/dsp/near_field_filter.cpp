@@ -10,10 +10,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <numbers>
 
 #include "audiobat/protocol.hpp"
+#include "audiobat/types.hpp"
 #include "rigid_sphere_math.hpp"
 
 namespace audiobat
@@ -25,7 +25,7 @@ namespace
 // Short: this shelf only shapes frequencies below CornerHz (see below,
 // ~624Hz), and gets convolved onto the far-field filter afterward, which
 // carries all the fine spectral detail.
-constexpr uint32_t TapCount = 64;
+constexpr uint32 TapCount = 64;
 
 // Where the near-field boost concentrates: below roughly c/(2*pi*a), the
 // wavelength is large relative to the head, which is where rigid-sphere

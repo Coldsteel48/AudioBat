@@ -8,10 +8,11 @@
 
 #pragma once
 
-#include <cstdint>
 #include <vector>
 
 #include <kiss_fftr.h>
+
+#include "audiobat/types.hpp"
 
 namespace audiobat
 {
@@ -40,23 +41,23 @@ public:
     // (zero-padded) filter into the frequency domain, and allocates every
     // buffer ProcessAccumulate() touches. Not realtime-safe - call once,
     // before the stage owning this convolver starts processing audio.
-    void Load(const float* Taps, uint32_t TapCount);
+    void Load(const float* Taps, uint32 TapCount);
 
     // Realtime-safe once Load() has run: convolves Frames of mono Input
     // against the loaded filter and ADDS the result into Output (so
     // callers can sum several convolvers' contributions without a
     // separate mix pass - Output is not cleared first). No allocation.
-    void ProcessAccumulate(const float* Input, float* Output, uint32_t Frames);
+    void ProcessAccumulate(const float* Input, float* Output, uint32 Frames);
 
 private:
     // New input samples consumed per internal FFT block. Fixed rather
     // than derived from the filter length: keeps added latency small and
     // predictable regardless of which SOFA file is loaded.
-    static constexpr uint32_t BlockSamples = 128;
+    static constexpr uint32 BlockSamples = 128;
 
     void RunOneBlock();
 
-    uint32_t FftSize = 0;
+    uint32 FftSize = 0;
 
     kiss_fftr_cfg ForwardPlan = nullptr;
     kiss_fftr_cfg InversePlan = nullptr;
@@ -71,13 +72,13 @@ private:
 
     // Input accumulated since the last full block; drained by RunOneBlock.
     std::vector<float> PendingInput;
-    uint32_t PendingInputCount = 0;
+    uint32 PendingInputCount = 0;
 
     // Valid convolution output produced by RunOneBlock, not yet handed to
     // a caller.
     std::vector<float> PendingOutput;
-    uint32_t PendingOutputStart = 0;
-    uint32_t PendingOutputCount = 0;
+    uint32 PendingOutputStart = 0;
+    uint32 PendingOutputCount = 0;
 };
 
 } // namespace audiobat

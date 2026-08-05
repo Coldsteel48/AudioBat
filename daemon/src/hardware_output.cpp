@@ -121,7 +121,7 @@ bool HardwareOutput::SetTargetNode(std::string NewTargetNodeName)
         bool bSuccess = false;
     } Context{this};
 
-    auto InvokeFunc = [](struct spa_loop*, bool, uint32_t, const void*, size_t, void* UserData) -> int
+    auto InvokeFunc = [](struct spa_loop*, bool, uint32, const void*, size_t, void* UserData) -> int
     {
         auto* Ctx = static_cast<InvokeContext*>(UserData);
         Ctx->bSuccess = Ctx->Self->ReconnectOnLoopThread();
@@ -154,7 +154,7 @@ bool HardwareOutput::ReconnectOnLoopThread()
 
 bool HardwareOutput::ConnectStream()
 {
-    uint8_t Buffer[1024];
+    uint8 Buffer[1024];
     spa_pod_builder Builder = SPA_POD_BUILDER_INIT(Buffer, sizeof(Buffer));
 
     spa_audio_info_raw Info{};
@@ -199,21 +199,21 @@ void HardwareOutput::HandleProcess()
         return;
     }
 
-    const uint32_t Stride = sizeof(float) * Channels;
-    uint32_t Frames = Buf->datas[0].maxsize / Stride;
+    const uint32 Stride = sizeof(float) * Channels;
+    uint32 Frames = Buf->datas[0].maxsize / Stride;
     if (PwBuffer->requested > 0)
     {
-        Frames = std::min<uint32_t>(Frames, static_cast<uint32_t>(PwBuffer->requested));
+        Frames = std::min<uint32>(Frames, static_cast<uint32>(PwBuffer->requested));
     }
 
-    uint32_t Written = Callback ? Callback(Dst, Frames) : 0;
+    uint32 Written = Callback ? Callback(Dst, Frames) : 0;
     if (Written < Frames)
     {
         std::memset(Dst + Written * Channels, 0, (Frames - Written) * Stride);
     }
 
     Buf->datas[0].chunk->offset = 0;
-    Buf->datas[0].chunk->stride = static_cast<int32_t>(Stride);
+    Buf->datas[0].chunk->stride = static_cast<int32>(Stride);
     Buf->datas[0].chunk->size = Frames * Stride;
 
     pw_stream_queue_buffer(Stream, PwBuffer);

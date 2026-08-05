@@ -39,7 +39,7 @@ float ComputeHrtfNormalizationGain(HrtfSourceKind Kind, const std::string& SofaP
     }
 
     float PeakTap = 0.0f;
-    for (uint32_t k = 0; k < 8; ++k)
+    for (uint32 k = 0; k < 8; ++k)
     {
         const float AzimuthDegrees = static_cast<float>(k) * 45.0f;
         const HrtfFilter Filter = Loader.GetFilter(AzimuthDegrees, 0.0f);

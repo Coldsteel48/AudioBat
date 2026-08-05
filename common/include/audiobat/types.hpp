@@ -8,20 +8,20 @@
 
 #pragma once
 
-#include "audiobat/types.hpp"
-#include "dsp_stage.hpp"
+#include <cstdint>
 
+// Short fixed-width integer aliases used throughout daemon, GUI, and common
+// code instead of the verbose <cstdint> _t names.
 namespace audiobat
 {
 
-// "Off" spatial mode: static-gain downmix from 7.1 (FL, FR, FC, LFE, RL,
-// RR, SL, SR) to stereo. No spatialization at all.
-class PassthroughStage final : public DspStage
-{
-public:
-    void Process(const float* Input, uint32 InputChannels,
-                 float* Output, uint32 OutputChannels,
-                 uint32 Frames) override;
-};
+using int8 = std::int8_t;
+using uint8 = std::uint8_t;
+using int16 = std::int16_t;
+using uint16 = std::uint16_t;
+using int32 = std::int32_t;
+using uint32 = std::uint32_t;
+using int64 = std::int64_t;
+using uint64 = std::uint64_t;
 
 } // namespace audiobat

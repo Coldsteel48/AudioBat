@@ -15,7 +15,7 @@ HrtfDeck::HrtfDeck(const SpeakerLayout& InLayout, HrtfSourceKind Kind, const std
                    float InSampleRate, bool bInitialNearFieldEnabled)
     : Layout(InLayout), SampleRate(InSampleRate), bNearFieldEnabled(bInitialNearFieldEnabled),
       Slot(std::make_shared<BinauralStage>(Layout, Kind, SofaPath, SampleRate, bInitialNearFieldEnabled),
-           static_cast<uint32_t>(0.05f * InSampleRate), // ~50ms crossfade
+           static_cast<uint32>(0.05f * InSampleRate), // ~50ms crossfade
            ChannelsPerFrame)
 {
 }
@@ -51,12 +51,12 @@ void HrtfDeck::CollectGarbage()
     Slot.ForwardToLive([](BinauralStage& Stage) { Stage.CollectVoiceGarbage(); });
 }
 
-void HrtfDeck::Process(const float* Input, uint32_t InputChannels,
-                       float* Output, uint32_t OutputChannels,
-                       uint32_t Frames)
+void HrtfDeck::Process(const float* Input, uint32 InputChannels,
+                       float* Output, uint32 OutputChannels,
+                       uint32 Frames)
 {
     Slot.Process(
-        [Input, InputChannels, OutputChannels](BinauralStage& Stage, float* Out, uint32_t InFrames)
+        [Input, InputChannels, OutputChannels](BinauralStage& Stage, float* Out, uint32 InFrames)
         {
             Stage.Process(Input, InputChannels, Out, OutputChannels, InFrames);
         },

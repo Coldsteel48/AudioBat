@@ -10,9 +10,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <numbers>
 
+#include "audiobat/types.hpp"
 #include "rigid_sphere_math.hpp"
 
 namespace audiobat
@@ -26,7 +26,7 @@ constexpr float DegToRad = std::numbers::pi_v<float> / 180.0f;
 // Short relative to measured HRIRs (which run into the hundreds of taps):
 // this model has no fine spectral detail to represent, just a single-pole
 // shelf, so a long tail would only waste convolver cycles.
-constexpr uint32_t TapCount = 128;
+constexpr uint32 TapCount = 128;
 
 // Far-ear low-pass shelf cutoff at broadside (fully lateral, alpha=90) vs.
 // dead ahead/behind (alpha=0, effectively no shadowing to model).

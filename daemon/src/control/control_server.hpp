@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "audiobat/protocol.hpp"
+#include "audiobat/types.hpp"
 
 namespace audiobat
 {
@@ -29,7 +30,7 @@ public:
     // to write to the socket; the handler picks the response opcode
     // (StatusResponse, DeviceListResponse, ...) so ControlServer itself
     // stays agnostic to what any given command returns.
-    using CommandHandler = std::function<std::vector<uint8_t>(const Command&)>;
+    using CommandHandler = std::function<std::vector<uint8>(const Command&)>;
 
     explicit ControlServer(std::string InSocketPath);
     ~ControlServer();

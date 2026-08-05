@@ -46,7 +46,7 @@ namespace
 // DspStage::MaxProcessFrames so every stage's own scratch buffers (e.g.
 // BinauralStage's virtual speaker signals) are sized consistently with
 // what AudioEngine will ever actually pass to Process().
-constexpr uint32_t MaxScratchFrames = MaxProcessFrames;
+constexpr uint32 MaxScratchFrames = MaxProcessFrames;
 
 // Last-resort fallback, only reached if DeviceRegistry hasn't discovered
 // any real hardware sink at all by the time Run() picks an initial output
@@ -57,7 +57,7 @@ constexpr const char* TestOutputNodeName = "alsa_output.usb-SteelSeries_Arctis_7
 // Raw 7.1 input channel order, matching the layout VirtualSink captures
 // (same convention duplicated locally in ambisonics_stage.cpp and
 // passthrough_stage.cpp).
-enum SevenOneChannel : uint32_t
+enum SevenOneChannel : uint32
 {
     FL = 0,
     FR = 1,
@@ -72,7 +72,7 @@ enum SevenOneChannel : uint32_t
 // Maps SpeakerLayout::SpeakerChannel index (0..6, non-LFE order FL,FR,FC,
 // RL,RR,SL,SR) to its frame offset within the 8-channel interleaved 7.1
 // layout above.
-constexpr uint32_t SpeakerToFrameIndex[SpeakerCount] = {FL, FR, FC, RL, RR, SL, SR};
+constexpr uint32 SpeakerToFrameIndex[SpeakerCount] = {FL, FR, FC, RL, RR, SL, SR};
 
 // Test noise amplitude: loud enough to clearly identify a speaker, quiet
 // enough not to be unpleasant or risk clipping once decoded/summed.
@@ -218,7 +218,7 @@ void AudioEngine::RebuildHrtfCatalog()
     }
 
     std::lock_guard<std::mutex> Lock(HrtfCatalogMutex);
-    const uint8_t OldIndex = ActiveHrtfIndex.load(std::memory_order_relaxed);
+    const uint8 OldIndex = ActiveHrtfIndex.load(std::memory_order_relaxed);
     if (OldIndex < RuntimeHrtfCatalog.size())
     {
         const std::string OldDisplayName = RuntimeHrtfCatalog[OldIndex].DisplayName;
@@ -226,7 +226,7 @@ void AudioEngine::RebuildHrtfCatalog()
         {
             if (NewCatalog[i].DisplayName == OldDisplayName)
             {
-                ActiveHrtfIndex.store(static_cast<uint8_t>(i), std::memory_order_relaxed);
+                ActiveHrtfIndex.store(static_cast<uint8>(i), std::memory_order_relaxed);
                 break;
             }
         }
@@ -234,7 +234,7 @@ void AudioEngine::RebuildHrtfCatalog()
     RuntimeHrtfCatalog = std::move(NewCatalog);
 }
 
-void AudioEngine::OnHrtfDirectoryChanged(void* Data, int Fd, uint32_t Mask)
+void AudioEngine::OnHrtfDirectoryChanged(void* Data, int Fd, uint32 Mask)
 {
     (void)Mask;
 
@@ -302,7 +302,7 @@ int AudioEngine::Run()
     {
         Mode.store(LoadedSettings->Mode, std::memory_order_relaxed);
         bNearFieldEnabled.store(LoadedSettings->bNearFieldEnabled, std::memory_order_relaxed);
-        for (uint8_t i = 0; i < SpeakerCount; ++i)
+        for (uint8 i = 0; i < SpeakerCount; ++i)
         {
             const auto Channel = static_cast<SpeakerLayout::SpeakerChannel>(i);
             SharedLayout.SetSpeakerAzimuth(Channel, LoadedSettings->SpeakerAzimuthDegrees[i]);
@@ -358,7 +358,7 @@ int AudioEngine::Run()
             {
                 InitialSofaPath = RuntimeHrtfCatalog[i].Path;
                 InitialHrtfKind = RuntimeHrtfCatalog[i].Kind;
-                ActiveHrtfIndex.store(static_cast<uint8_t>(i), std::memory_order_relaxed);
+                ActiveHrtfIndex.store(static_cast<uint8>(i), std::memory_order_relaxed);
                 bAppliedPersistedHrtfChoice = true;
                 break;
             }
@@ -376,7 +376,7 @@ int AudioEngine::Run()
             if (RuntimeHrtfCatalog[i].Kind == HrtfSourceKind::SofaFile &&
                 InitialSofaPath == RuntimeHrtfCatalog[i].Path)
             {
-                ActiveHrtfIndex.store(static_cast<uint8_t>(i), std::memory_order_relaxed);
+                ActiveHrtfIndex.store(static_cast<uint8>(i), std::memory_order_relaxed);
                 break;
             }
         }
@@ -388,7 +388,7 @@ int AudioEngine::Run()
 
     Sink = std::make_unique<VirtualSink>(Loop);
     Sink->SetAudioCallback(
-        [this](const float* Interleaved, uint32_t Frames)
+        [this](const float* Interleaved, uint32 Frames)
         {
             HandleVirtualSinkAudio(Interleaved, Frames);
         });
@@ -425,7 +425,7 @@ int AudioEngine::Run()
 
     Output = std::make_unique<HardwareOutput>(Loop, InitialOutputDevice);
     Output->SetFillCallback(
-        [this](float* Interleaved, uint32_t Frames)
+        [this](float* Interleaved, uint32 Frames)
         {
             return HandleHardwareOutputRequest(Interleaved, Frames);
         });
@@ -504,7 +504,7 @@ DspStage& AudioEngine::ActiveStage()
     }
 }
 
-void AudioEngine::HandleVirtualSinkAudio(const float* Interleaved, uint32_t Frames)
+void AudioEngine::HandleVirtualSinkAudio(const float* Interleaved, uint32 Frames)
 {
     if (Frames > MaxScratchFrames)
     {
@@ -527,11 +527,11 @@ void AudioEngine::HandleVirtualSinkAudio(const float* Interleaved, uint32_t Fram
     StereoMixBuffer.Push(DspScratch.data(), Frames * HardwareOutput::Channels);
 }
 
-void AudioEngine::ApplySpeakerMute(float* Interleaved, uint32_t Frames)
+void AudioEngine::ApplySpeakerMute(float* Interleaved, uint32 Frames)
 {
     bool MuteFlags[SpeakerCount];
     bool bAnyMuted = false;
-    for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
+    for (uint32 Speaker = 0; Speaker < SpeakerCount; ++Speaker)
     {
         MuteFlags[Speaker] = SharedLayout.IsSpeakerMuted(static_cast<SpeakerLayout::SpeakerChannel>(Speaker));
         bAnyMuted |= MuteFlags[Speaker];
@@ -541,10 +541,10 @@ void AudioEngine::ApplySpeakerMute(float* Interleaved, uint32_t Frames)
         return;
     }
 
-    for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
+    for (uint32 FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
     {
         float* Frame = Interleaved + FrameIndex * VirtualSink::Channels;
-        for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
+        for (uint32 Speaker = 0; Speaker < SpeakerCount; ++Speaker)
         {
             if (MuteFlags[Speaker])
             {
@@ -554,7 +554,7 @@ void AudioEngine::ApplySpeakerMute(float* Interleaved, uint32_t Frames)
     }
 }
 
-void AudioEngine::ApplyNearFieldLoudnessFalloff(float* Interleaved, uint32_t Frames)
+void AudioEngine::ApplyNearFieldLoudnessFalloff(float* Interleaved, uint32 Frames)
 {
     if (!bNearFieldEnabled.load(std::memory_order_relaxed))
     {
@@ -562,28 +562,28 @@ void AudioEngine::ApplyNearFieldLoudnessFalloff(float* Interleaved, uint32_t Fra
     }
 
     float Gains[SpeakerCount];
-    for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
+    for (uint32 Speaker = 0; Speaker < SpeakerCount; ++Speaker)
     {
         const float Distance = SharedLayout.GetSpeakerDistance(static_cast<SpeakerLayout::SpeakerChannel>(Speaker));
         Gains[Speaker] = ReferenceSpeakerDistanceMeters / std::max(Distance, MinSpeakerDistanceMeters);
     }
 
-    for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
+    for (uint32 FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
     {
         float* Frame = Interleaved + FrameIndex * VirtualSink::Channels;
-        for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
+        for (uint32 Speaker = 0; Speaker < SpeakerCount; ++Speaker)
         {
             Frame[SpeakerToFrameIndex[Speaker]] *= Gains[Speaker];
         }
     }
 }
 
-void AudioEngine::FillTestNoise(float* Interleaved, uint32_t Frames)
+void AudioEngine::FillTestNoise(float* Interleaved, uint32 Frames)
 {
-    for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
+    for (uint32 FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
     {
         float* Frame = Interleaved + FrameIndex * VirtualSink::Channels;
-        for (uint32_t Channel = 0; Channel < VirtualSink::Channels; ++Channel)
+        for (uint32 Channel = 0; Channel < VirtualSink::Channels; ++Channel)
         {
             if (Channel == LFE)
             {
@@ -601,13 +601,13 @@ void AudioEngine::FillTestNoise(float* Interleaved, uint32_t Frames)
     }
 }
 
-uint32_t AudioEngine::HandleHardwareOutputRequest(float* Interleaved, uint32_t Frames)
+uint32 AudioEngine::HandleHardwareOutputRequest(float* Interleaved, uint32 Frames)
 {
     const size_t Popped = StereoMixBuffer.Pop(Interleaved, Frames * HardwareOutput::Channels);
-    return static_cast<uint32_t>(Popped / HardwareOutput::Channels);
+    return static_cast<uint32>(Popped / HardwareOutput::Channels);
 }
 
-std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
+std::vector<uint8> AudioEngine::HandleControlCommand(const Command& InCommand)
 {
     // Reclaims whatever HrtfDeck's last completed crossfade faded out of.
     // Not realtime-safe (may deallocate) - fine here, this runs on a
@@ -678,7 +678,7 @@ std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
     {
         SharedLayout.ResetSpeakerPositions();
         bPersistedStateChanged = true;
-        for (uint8_t i = 0; i < SpeakerCount; ++i)
+        for (uint8 i = 0; i < SpeakerCount; ++i)
         {
             const auto Channel = static_cast<SpeakerLayout::SpeakerChannel>(i);
             AdvancedStage->RebuildVoiceForSpeaker(Channel, SharedLayout.GetSpeakerAzimuth(Channel),
@@ -745,7 +745,7 @@ std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
     OutStatus.bTestNoiseEnabled = bTestNoiseEnabled.load(std::memory_order_relaxed);
     OutStatus.ActiveHrtfIndex = ActiveHrtfIndex.load(std::memory_order_relaxed);
     OutStatus.bNearFieldEnabled = bNearFieldEnabled.load(std::memory_order_relaxed);
-    for (uint8_t i = 0; i < SpeakerCount; ++i)
+    for (uint8 i = 0; i < SpeakerCount; ++i)
     {
         OutStatus.SpeakerAzimuthDegrees[i] =
             SharedLayout.GetSpeakerAzimuth(static_cast<SpeakerLayout::SpeakerChannel>(i));

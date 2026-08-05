@@ -10,8 +10,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <vector>
+
+#include "audiobat/types.hpp"
 
 namespace audiobat
 {
@@ -43,7 +44,7 @@ struct HrtfFilter
 // the two in translation units that end up seeing both.
 inline std::vector<float> BuildDelayedHrtfFilter(const std::vector<float>& Taps, float DelaySamples)
 {
-    const uint32_t IntDelay = static_cast<uint32_t>(std::lround(std::max(0.0f, DelaySamples)));
+    const uint32 IntDelay = static_cast<uint32>(std::lround(std::max(0.0f, DelaySamples)));
     std::vector<float> Delayed(Taps.size() + IntDelay, 0.0f);
     std::copy(Taps.begin(), Taps.end(), Delayed.begin() + IntDelay);
     return Delayed;

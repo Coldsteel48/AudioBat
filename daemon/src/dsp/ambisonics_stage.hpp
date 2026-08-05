@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "audiobat/types.hpp"
 #include "dsp_stage.hpp"
 #include "speaker_layout.hpp"
 
@@ -35,9 +36,9 @@ public:
     {
     }
 
-    void Process(const float* Input, uint32_t InputChannels,
-                 float* Output, uint32_t OutputChannels,
-                 uint32_t Frames) override;
+    void Process(const float* Input, uint32 InputChannels,
+                 float* Output, uint32 OutputChannels,
+                 uint32 Frames) override;
 
 private:
     const SpeakerLayout& Layout;

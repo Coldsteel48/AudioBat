@@ -66,7 +66,7 @@ constexpr float DecodeNormalization = 0.4805061f;
 constexpr float LfeGain = 0.5f; // matches PassthroughStage
 
 // Raw 7.1 input channel order, matching the layout VirtualSink captures.
-enum SevenOneChannel : uint32_t
+enum SevenOneChannel : uint32
 {
     FL = 0,
     FR = 1,
@@ -81,9 +81,9 @@ enum SevenOneChannel : uint32_t
 
 } // namespace
 
-void AmbisonicsStage::Process(const float* Input, uint32_t InputChannels,
-                               float* Output, uint32_t OutputChannels,
-                               uint32_t Frames)
+void AmbisonicsStage::Process(const float* Input, uint32 InputChannels,
+                               float* Output, uint32 OutputChannels,
+                               uint32 Frames)
 {
     if (InputChannels != SevenOneChannelCount || OutputChannels != 2)
     {
@@ -97,7 +97,7 @@ void AmbisonicsStage::Process(const float* Input, uint32_t InputChannels,
     // they only change from control commands, never at audio rate.
     const SpeakerLayout::Directions Dirs = Layout.SnapshotDirections();
 
-    for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
+    for (uint32 FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
     {
         const float* InFrame = Input + FrameIndex * InputChannels;
         float* OutFrame = Output + FrameIndex * OutputChannels;

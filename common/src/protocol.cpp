@@ -22,29 +22,29 @@ namespace audiobat
 namespace
 {
 
-void AppendHeader(std::vector<uint8_t>& Out, Opcode InOpcode, uint16_t PayloadLength)
+void AppendHeader(std::vector<uint8>& Out, Opcode InOpcode, uint16 PayloadLength)
 {
-    Out.push_back(static_cast<uint8_t>(InOpcode));
-    Out.push_back(static_cast<uint8_t>((PayloadLength >> 8) & 0xFF));
-    Out.push_back(static_cast<uint8_t>(PayloadLength & 0xFF));
+    Out.push_back(static_cast<uint8>(InOpcode));
+    Out.push_back(static_cast<uint8>((PayloadLength >> 8) & 0xFF));
+    Out.push_back(static_cast<uint8>(PayloadLength & 0xFF));
 }
 
-void AppendFloatBE(std::vector<uint8_t>& Out, float Value)
+void AppendFloatBE(std::vector<uint8>& Out, float Value)
 {
-    uint32_t Bits;
+    uint32 Bits;
     std::memcpy(&Bits, &Value, sizeof(Bits));
-    Out.push_back(static_cast<uint8_t>((Bits >> 24) & 0xFF));
-    Out.push_back(static_cast<uint8_t>((Bits >> 16) & 0xFF));
-    Out.push_back(static_cast<uint8_t>((Bits >> 8) & 0xFF));
-    Out.push_back(static_cast<uint8_t>(Bits & 0xFF));
+    Out.push_back(static_cast<uint8>((Bits >> 24) & 0xFF));
+    Out.push_back(static_cast<uint8>((Bits >> 16) & 0xFF));
+    Out.push_back(static_cast<uint8>((Bits >> 8) & 0xFF));
+    Out.push_back(static_cast<uint8>(Bits & 0xFF));
 }
 
-float ReadFloatBE(const uint8_t* Payload)
+float ReadFloatBE(const uint8* Payload)
 {
-    const uint32_t Bits = (static_cast<uint32_t>(Payload[0]) << 24) |
-                          (static_cast<uint32_t>(Payload[1]) << 16) |
-                          (static_cast<uint32_t>(Payload[2]) << 8) |
-                          static_cast<uint32_t>(Payload[3]);
+    const uint32 Bits = (static_cast<uint32>(Payload[0]) << 24) |
+                          (static_cast<uint32>(Payload[1]) << 16) |
+                          (static_cast<uint32>(Payload[2]) << 8) |
+                          static_cast<uint32>(Payload[3]);
     float Value;
     std::memcpy(&Value, &Bits, sizeof(Value));
     return Value;
@@ -53,24 +53,24 @@ float ReadFloatBE(const uint8_t* Payload)
 // Appends a length-prefixed (u16 BE) string. Used for fields embedded
 // alongside fixed-size data (Status, DeviceListResponse) where a raw
 // whole-payload string (like ErrorResponse's) wouldn't be unambiguous.
-void AppendString(std::vector<uint8_t>& Out, const std::string& Value)
+void AppendString(std::vector<uint8>& Out, const std::string& Value)
 {
-    const uint16_t Len = static_cast<uint16_t>(std::min(Value.size(), static_cast<size_t>(0xFFFF)));
-    Out.push_back(static_cast<uint8_t>((Len >> 8) & 0xFF));
-    Out.push_back(static_cast<uint8_t>(Len & 0xFF));
+    const uint16 Len = static_cast<uint16>(std::min(Value.size(), static_cast<size_t>(0xFFFF)));
+    Out.push_back(static_cast<uint8>((Len >> 8) & 0xFF));
+    Out.push_back(static_cast<uint8>(Len & 0xFF));
     Out.insert(Out.end(), Value.begin(), Value.begin() + Len);
 }
 
 // Reads a length-prefixed string starting at `Offset`, advancing it past
 // the string on success. Returns false (leaving OutValue untouched) if
 // PayloadLength doesn't have enough bytes for the length or the string.
-bool ReadString(const uint8_t* Payload, uint16_t PayloadLength, size_t& Offset, std::string& OutValue)
+bool ReadString(const uint8* Payload, uint16 PayloadLength, size_t& Offset, std::string& OutValue)
 {
     if (Offset + 2 > PayloadLength)
     {
         return false;
     }
-    const uint16_t Len = static_cast<uint16_t>((Payload[Offset] << 8) | Payload[Offset + 1]);
+    const uint16 Len = static_cast<uint16>((Payload[Offset] << 8) | Payload[Offset + 1]);
     Offset += 2;
     if (Offset + Len > PayloadLength)
     {
@@ -83,7 +83,7 @@ bool ReadString(const uint8_t* Payload, uint16_t PayloadLength, size_t& Offset, 
 
 } // namespace
 
-std::optional<MessageHeader> TryReadHeader(const uint8_t* Buffer, size_t Available)
+std::optional<MessageHeader> TryReadHeader(const uint8* Buffer, size_t Available)
 {
     if (Available < HeaderSize)
     {
@@ -91,11 +91,11 @@ std::optional<MessageHeader> TryReadHeader(const uint8_t* Buffer, size_t Availab
     }
     MessageHeader Header;
     Header.MessageOpcode = static_cast<Opcode>(Buffer[0]);
-    Header.PayloadLength = static_cast<uint16_t>((Buffer[1] << 8) | Buffer[2]);
+    Header.PayloadLength = static_cast<uint16>((Buffer[1] << 8) | Buffer[2]);
     return Header;
 }
 
-std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8_t* Payload, uint16_t PayloadLength)
+std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8* Payload, uint16 PayloadLength)
 {
     Command OutCommand;
     OutCommand.CommandOpcode = InOpcode;
@@ -105,7 +105,7 @@ std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8_t* Payload, ui
     case Opcode::GetStatus:
         return OutCommand;
     case Opcode::SetSpatialMode:
-        if (PayloadLength < 1 || Payload[0] > static_cast<uint8_t>(SpatialMode::Advanced))
+        if (PayloadLength < 1 || Payload[0] > static_cast<uint8>(SpatialMode::Advanced))
         {
             return std::nullopt;
         }
@@ -173,13 +173,13 @@ std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8_t* Payload, ui
     }
 }
 
-std::optional<Status> DecodeStatusResponse(const uint8_t* Payload, uint16_t PayloadLength)
+std::optional<Status> DecodeStatusResponse(const uint8* Payload, uint16 PayloadLength)
 {
     // Layout: [mode:1][azimuths: 4*SpeakerCount][muted: SpeakerCount][noise:1][activeHrtfIndex:1]
     //         [distances: 4*SpeakerCount][nearFieldEnabled:1][device: length-prefixed string]
-    const uint16_t FixedSize =
-        static_cast<uint16_t>(1 + 4 * SpeakerCount + SpeakerCount + 1 + 1 + 4 * SpeakerCount + 1);
-    if (PayloadLength < FixedSize || Payload[0] > static_cast<uint8_t>(SpatialMode::Advanced))
+    const uint16 FixedSize =
+        static_cast<uint16>(1 + 4 * SpeakerCount + SpeakerCount + 1 + 1 + 4 * SpeakerCount + 1);
+    if (PayloadLength < FixedSize || Payload[0] > static_cast<uint8>(SpatialMode::Advanced))
     {
         return std::nullopt;
     }
@@ -212,25 +212,25 @@ std::optional<Status> DecodeStatusResponse(const uint8_t* Payload, uint16_t Payl
     return OutStatus;
 }
 
-std::string DecodeErrorResponse(const uint8_t* Payload, uint16_t PayloadLength)
+std::string DecodeErrorResponse(const uint8* Payload, uint16 PayloadLength)
 {
     return std::string(reinterpret_cast<const char*>(Payload), PayloadLength);
 }
 
-std::optional<std::vector<AudioDeviceInfo>> DecodeDeviceListResponse(const uint8_t* Payload,
-                                                                       uint16_t PayloadLength)
+std::optional<std::vector<AudioDeviceInfo>> DecodeDeviceListResponse(const uint8* Payload,
+                                                                       uint16 PayloadLength)
 {
     size_t Offset = 0;
     if (Offset + 2 > PayloadLength)
     {
         return std::nullopt;
     }
-    const uint16_t Count = static_cast<uint16_t>((Payload[Offset] << 8) | Payload[Offset + 1]);
+    const uint16 Count = static_cast<uint16>((Payload[Offset] << 8) | Payload[Offset + 1]);
     Offset += 2;
 
     std::vector<AudioDeviceInfo> Devices;
     Devices.reserve(Count);
-    for (uint16_t i = 0; i < Count; ++i)
+    for (uint16 i = 0; i < Count; ++i)
     {
         AudioDeviceInfo Info;
         if (!ReadString(Payload, PayloadLength, Offset, Info.Name) ||
@@ -243,20 +243,20 @@ std::optional<std::vector<AudioDeviceInfo>> DecodeDeviceListResponse(const uint8
     return Devices;
 }
 
-std::optional<std::vector<std::string>> DecodeHrtfCatalogResponse(const uint8_t* Payload,
-                                                                    uint16_t PayloadLength)
+std::optional<std::vector<std::string>> DecodeHrtfCatalogResponse(const uint8* Payload,
+                                                                    uint16 PayloadLength)
 {
     size_t Offset = 0;
     if (Offset + 2 > PayloadLength)
     {
         return std::nullopt;
     }
-    const uint16_t Count = static_cast<uint16_t>((Payload[Offset] << 8) | Payload[Offset + 1]);
+    const uint16 Count = static_cast<uint16>((Payload[Offset] << 8) | Payload[Offset + 1]);
     Offset += 2;
 
     std::vector<std::string> DisplayNames;
     DisplayNames.reserve(Count);
-    for (uint16_t i = 0; i < Count; ++i)
+    for (uint16 i = 0; i < Count; ++i)
     {
         std::string Name;
         if (!ReadString(Payload, PayloadLength, Offset, Name))
@@ -268,10 +268,10 @@ std::optional<std::vector<std::string>> DecodeHrtfCatalogResponse(const uint8_t*
     return DisplayNames;
 }
 
-std::vector<uint8_t> EncodeStatusResponse(const Status& InStatus)
+std::vector<uint8> EncodeStatusResponse(const Status& InStatus)
 {
-    std::vector<uint8_t> Payload;
-    Payload.push_back(static_cast<uint8_t>(InStatus.Mode));
+    std::vector<uint8> Payload;
+    Payload.push_back(static_cast<uint8>(InStatus.Mode));
     for (float Azimuth : InStatus.SpeakerAzimuthDegrees)
     {
         AppendFloatBE(Payload, Azimuth);
@@ -289,33 +289,33 @@ std::vector<uint8_t> EncodeStatusResponse(const Status& InStatus)
     Payload.push_back(InStatus.bNearFieldEnabled ? 1 : 0);
     AppendString(Payload, InStatus.OutputDeviceName);
 
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     Out.reserve(HeaderSize + Payload.size());
-    AppendHeader(Out, Opcode::StatusResponse, static_cast<uint16_t>(Payload.size()));
+    AppendHeader(Out, Opcode::StatusResponse, static_cast<uint16>(Payload.size()));
     Out.insert(Out.end(), Payload.begin(), Payload.end());
     return Out;
 }
 
-std::vector<uint8_t> EncodeErrorResponse(const std::string& Message)
+std::vector<uint8> EncodeErrorResponse(const std::string& Message)
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     const size_t Len = Message.size() > MaxPayloadSize ? MaxPayloadSize : Message.size();
     Out.reserve(HeaderSize + Len);
-    AppendHeader(Out, Opcode::ErrorResponse, static_cast<uint16_t>(Len));
+    AppendHeader(Out, Opcode::ErrorResponse, static_cast<uint16>(Len));
     Out.insert(Out.end(), Message.begin(), Message.begin() + static_cast<std::ptrdiff_t>(Len));
     return Out;
 }
 
-std::vector<uint8_t> EncodeDeviceListResponse(const std::vector<AudioDeviceInfo>& Devices)
+std::vector<uint8> EncodeDeviceListResponse(const std::vector<AudioDeviceInfo>& Devices)
 {
-    std::vector<uint8_t> Payload;
+    std::vector<uint8> Payload;
     Payload.push_back(0); // count placeholder, patched below once the final count is known
     Payload.push_back(0);
 
-    uint16_t Count = 0;
+    uint16 Count = 0;
     for (const auto& Device : Devices)
     {
-        std::vector<uint8_t> Entry;
+        std::vector<uint8> Entry;
         AppendString(Entry, Device.Name);
         AppendString(Entry, Device.Description);
         if (Payload.size() + Entry.size() > MaxPayloadSize)
@@ -325,26 +325,26 @@ std::vector<uint8_t> EncodeDeviceListResponse(const std::vector<AudioDeviceInfo>
         Payload.insert(Payload.end(), Entry.begin(), Entry.end());
         ++Count;
     }
-    Payload[0] = static_cast<uint8_t>((Count >> 8) & 0xFF);
-    Payload[1] = static_cast<uint8_t>(Count & 0xFF);
+    Payload[0] = static_cast<uint8>((Count >> 8) & 0xFF);
+    Payload[1] = static_cast<uint8>(Count & 0xFF);
 
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     Out.reserve(HeaderSize + Payload.size());
-    AppendHeader(Out, Opcode::DeviceListResponse, static_cast<uint16_t>(Payload.size()));
+    AppendHeader(Out, Opcode::DeviceListResponse, static_cast<uint16>(Payload.size()));
     Out.insert(Out.end(), Payload.begin(), Payload.end());
     return Out;
 }
 
-std::vector<uint8_t> EncodeHrtfCatalogResponse(const std::vector<std::string>& DisplayNames)
+std::vector<uint8> EncodeHrtfCatalogResponse(const std::vector<std::string>& DisplayNames)
 {
-    std::vector<uint8_t> Payload;
+    std::vector<uint8> Payload;
     Payload.push_back(0); // count placeholder, patched below once the final count is known
     Payload.push_back(0);
 
-    uint16_t Count = 0;
+    uint16 Count = 0;
     for (const auto& Name : DisplayNames)
     {
-        std::vector<uint8_t> Entry;
+        std::vector<uint8> Entry;
         AppendString(Entry, Name);
         if (Payload.size() + Entry.size() > MaxPayloadSize)
         {
@@ -353,35 +353,35 @@ std::vector<uint8_t> EncodeHrtfCatalogResponse(const std::vector<std::string>& D
         Payload.insert(Payload.end(), Entry.begin(), Entry.end());
         ++Count;
     }
-    Payload[0] = static_cast<uint8_t>((Count >> 8) & 0xFF);
-    Payload[1] = static_cast<uint8_t>(Count & 0xFF);
+    Payload[0] = static_cast<uint8>((Count >> 8) & 0xFF);
+    Payload[1] = static_cast<uint8>(Count & 0xFF);
 
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     Out.reserve(HeaderSize + Payload.size());
-    AppendHeader(Out, Opcode::HrtfCatalogResponse, static_cast<uint16_t>(Payload.size()));
+    AppendHeader(Out, Opcode::HrtfCatalogResponse, static_cast<uint16>(Payload.size()));
     Out.insert(Out.end(), Payload.begin(), Payload.end());
     return Out;
 }
 
-std::vector<uint8_t> EncodeGetStatusRequest()
+std::vector<uint8> EncodeGetStatusRequest()
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     AppendHeader(Out, Opcode::GetStatus, 0);
     return Out;
 }
 
-std::vector<uint8_t> EncodeSetSpatialModeRequest(SpatialMode Mode)
+std::vector<uint8> EncodeSetSpatialModeRequest(SpatialMode Mode)
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     Out.reserve(HeaderSize + 1);
     AppendHeader(Out, Opcode::SetSpatialMode, 1);
-    Out.push_back(static_cast<uint8_t>(Mode));
+    Out.push_back(static_cast<uint8>(Mode));
     return Out;
 }
 
-std::vector<uint8_t> EncodeSetSpeakerAzimuthRequest(uint8_t SpeakerIndex, float AzimuthDegrees)
+std::vector<uint8> EncodeSetSpeakerAzimuthRequest(uint8 SpeakerIndex, float AzimuthDegrees)
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     Out.reserve(HeaderSize + 5);
     AppendHeader(Out, Opcode::SetSpeakerAzimuth, 5);
     Out.push_back(SpeakerIndex);
@@ -389,33 +389,33 @@ std::vector<uint8_t> EncodeSetSpeakerAzimuthRequest(uint8_t SpeakerIndex, float 
     return Out;
 }
 
-std::vector<uint8_t> EncodeGetDevicesRequest()
+std::vector<uint8> EncodeGetDevicesRequest()
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     AppendHeader(Out, Opcode::GetDevices, 0);
     return Out;
 }
 
-std::vector<uint8_t> EncodeSetOutputDeviceRequest(const std::string& DeviceName)
+std::vector<uint8> EncodeSetOutputDeviceRequest(const std::string& DeviceName)
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     const size_t Len = DeviceName.size() > MaxPayloadSize ? MaxPayloadSize : DeviceName.size();
     Out.reserve(HeaderSize + Len);
-    AppendHeader(Out, Opcode::SetOutputDevice, static_cast<uint16_t>(Len));
+    AppendHeader(Out, Opcode::SetOutputDevice, static_cast<uint16>(Len));
     Out.insert(Out.end(), DeviceName.begin(), DeviceName.begin() + static_cast<std::ptrdiff_t>(Len));
     return Out;
 }
 
-std::vector<uint8_t> EncodeResetSpeakerPositionsRequest()
+std::vector<uint8> EncodeResetSpeakerPositionsRequest()
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     AppendHeader(Out, Opcode::ResetSpeakerPositions, 0);
     return Out;
 }
 
-std::vector<uint8_t> EncodeSetSpeakerMuteRequest(uint8_t SpeakerIndex, bool bMuted)
+std::vector<uint8> EncodeSetSpeakerMuteRequest(uint8 SpeakerIndex, bool bMuted)
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     Out.reserve(HeaderSize + 2);
     AppendHeader(Out, Opcode::SetSpeakerMute, 2);
     Out.push_back(SpeakerIndex);
@@ -423,34 +423,34 @@ std::vector<uint8_t> EncodeSetSpeakerMuteRequest(uint8_t SpeakerIndex, bool bMut
     return Out;
 }
 
-std::vector<uint8_t> EncodeSetTestNoiseRequest(bool bEnabled)
+std::vector<uint8> EncodeSetTestNoiseRequest(bool bEnabled)
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     Out.reserve(HeaderSize + 1);
     AppendHeader(Out, Opcode::SetTestNoise, 1);
     Out.push_back(bEnabled ? 1 : 0);
     return Out;
 }
 
-std::vector<uint8_t> EncodeGetHrtfCatalogRequest()
+std::vector<uint8> EncodeGetHrtfCatalogRequest()
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     AppendHeader(Out, Opcode::GetHrtfCatalog, 0);
     return Out;
 }
 
-std::vector<uint8_t> EncodeSetHrtfFileRequest(uint8_t HrtfIndex)
+std::vector<uint8> EncodeSetHrtfFileRequest(uint8 HrtfIndex)
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     Out.reserve(HeaderSize + 1);
     AppendHeader(Out, Opcode::SetHrtfFile, 1);
     Out.push_back(HrtfIndex);
     return Out;
 }
 
-std::vector<uint8_t> EncodeSetSpeakerDistanceRequest(uint8_t SpeakerIndex, float DistanceMeters)
+std::vector<uint8> EncodeSetSpeakerDistanceRequest(uint8 SpeakerIndex, float DistanceMeters)
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     Out.reserve(HeaderSize + 5);
     AppendHeader(Out, Opcode::SetSpeakerDistance, 5);
     Out.push_back(SpeakerIndex);
@@ -458,9 +458,9 @@ std::vector<uint8_t> EncodeSetSpeakerDistanceRequest(uint8_t SpeakerIndex, float
     return Out;
 }
 
-std::vector<uint8_t> EncodeSetNearFieldEnabledRequest(bool bEnabled)
+std::vector<uint8> EncodeSetNearFieldEnabledRequest(bool bEnabled)
 {
-    std::vector<uint8_t> Out;
+    std::vector<uint8> Out;
     Out.reserve(HeaderSize + 1);
     AppendHeader(Out, Opcode::SetNearFieldEnabled, 1);
     Out.push_back(bEnabled ? 1 : 0);

@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include <cstdint>
 #include <memory>
+
+#include "audiobat/types.hpp"
 
 struct ImDrawData;
 struct SDL_Window;
@@ -30,7 +31,7 @@ public:
 
     // SDL_WindowFlags bit(s) the window must be created with for this
     // backend (e.g. SDL_WINDOW_OPENGL).
-    virtual uint32_t GetSDLWindowFlags() const = 0;
+    virtual uint32 GetSDLWindowFlags() const = 0;
 
     // Creates the graphics context/device and initializes the matching
     // ImGui platform + renderer backends. Returns false on failure.

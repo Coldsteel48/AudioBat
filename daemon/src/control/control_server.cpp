@@ -114,8 +114,8 @@ void ControlServer::AcceptLoop()
 
 void ControlServer::HandleClient(int ClientFd)
 {
-    std::vector<uint8_t> Buffer;
-    uint8_t Chunk[512];
+    std::vector<uint8> Buffer;
+    uint8 Chunk[512];
 
     for (;;)
     {
@@ -139,8 +139,8 @@ void ControlServer::HandleClient(int ClientFd)
                 break; // need more bytes for the full payload
             }
 
-            const uint8_t* Payload = Buffer.data() + HeaderSize;
-            std::vector<uint8_t> Response;
+            const uint8* Payload = Buffer.data() + HeaderSize;
+            std::vector<uint8> Response;
 
             auto DecodedCommand = DecodeCommand(Header->MessageOpcode, Payload, Header->PayloadLength);
             if (!DecodedCommand)

@@ -10,11 +10,11 @@
 
 #include <array>
 #include <atomic>
-#include <cstdint>
 #include <memory>
 #include <utility>
 #include <vector>
 
+#include "audiobat/types.hpp"
 #include "dsp_stage.hpp"
 
 namespace audiobat
@@ -40,7 +40,7 @@ template <typename T>
 class CrossfadingSlot
 {
 public:
-    CrossfadingSlot(std::shared_ptr<T> Initial, uint32_t InCrossfadeFrames, uint32_t InChannelsPerFrame)
+    CrossfadingSlot(std::shared_ptr<T> Initial, uint32 InCrossfadeFrames, uint32 InChannelsPerFrame)
         : Live(std::move(Initial)), CrossfadeFrames(InCrossfadeFrames), ChannelsPerFrame(InChannelsPerFrame)
     {
         ScratchOld.assign(static_cast<size_t>(MaxProcessFrames) * ChannelsPerFrame, 0.0f);
@@ -65,13 +65,13 @@ public:
         }
     }
 
-    // Realtime-safe. RunOne(T&, float* Output, uint32_t Frames) must
+    // Realtime-safe. RunOne(T&, float* Output, uint32 Frames) must
     // render exactly one T instance's output (ChannelsPerFrame channels)
     // into Output; called once or twice per Process() call depending on
     // whether a crossfade is in flight. Interleaved output written to
     // Output (ChannelsPerFrame * Frames floats).
     template <typename RunOneFn>
-    void Process(RunOneFn&& RunOne, float* Output, uint32_t Frames)
+    void Process(RunOneFn&& RunOne, float* Output, uint32 Frames)
     {
         if (Frames > MaxProcessFrames)
         {
@@ -107,7 +107,7 @@ public:
         RunOne(*LiveCopy, ScratchNew.data(), Frames);
         RunOne(*FadingOut, ScratchOld.data(), Frames);
 
-        for (uint32_t FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
+        for (uint32 FrameIndex = 0; FrameIndex < Frames; ++FrameIndex)
         {
             const float NewGain =
                 1.0f - static_cast<float>(FadeFramesRemaining) / static_cast<float>(CrossfadeFrames);
@@ -116,7 +116,7 @@ public:
             float* OutFrame = Output + FrameIndex * ChannelsPerFrame;
             const float* OldFrame = ScratchOld.data() + FrameIndex * ChannelsPerFrame;
             const float* NewFrame = ScratchNew.data() + FrameIndex * ChannelsPerFrame;
-            for (uint32_t Channel = 0; Channel < ChannelsPerFrame; ++Channel)
+            for (uint32 Channel = 0; Channel < ChannelsPerFrame; ++Channel)
             {
                 OutFrame[Channel] = OldFrame[Channel] * OldGain + NewFrame[Channel] * NewGain;
             }
@@ -138,7 +138,7 @@ public:
             // forcing an overwrite that would deallocate the first slot's
             // contents right here.
             Trash[TrashSlot].store(std::move(FadingOut), std::memory_order_release);
-            TrashSlot = (TrashSlot + 1) % static_cast<uint32_t>(Trash.size());
+            TrashSlot = (TrashSlot + 1) % static_cast<uint32>(Trash.size());
         }
     }
 
@@ -170,10 +170,10 @@ private:
     // stays a plain, cheaper shared_ptr.
     std::atomic<std::shared_ptr<T>> Live;
     std::shared_ptr<T> FadingOut; // RT-thread-owned
-    uint32_t FadeFramesRemaining = 0;
-    uint32_t TrashSlot = 0;
-    const uint32_t CrossfadeFrames;
-    const uint32_t ChannelsPerFrame;
+    uint32 FadeFramesRemaining = 0;
+    uint32 TrashSlot = 0;
+    const uint32 CrossfadeFrames;
+    const uint32 ChannelsPerFrame;
 
     std::atomic<std::shared_ptr<T>> Pending{nullptr};
     std::array<std::atomic<std::shared_ptr<T>>, 2> Trash{};

@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include <cstdint>
 #include <optional>
 #include <vector>
 
 #include "audiobat/protocol.hpp"
+#include "audiobat/types.hpp"
 
 namespace audiobat::gui
 {
@@ -43,32 +43,32 @@ public:
     // "disconnected" and let Connect() retry later.
     std::optional<Status> RequestStatus();
     std::optional<Status> SetSpatialMode(SpatialMode Mode);
-    std::optional<Status> SetSpeakerAzimuth(uint8_t SpeakerIndex, float AzimuthDegrees);
-    std::optional<Status> SetSpeakerDistance(uint8_t SpeakerIndex, float DistanceMeters);
+    std::optional<Status> SetSpeakerAzimuth(uint8 SpeakerIndex, float AzimuthDegrees);
+    std::optional<Status> SetSpeakerDistance(uint8 SpeakerIndex, float DistanceMeters);
     std::optional<Status> SetNearFieldEnabled(bool bEnabled);
     std::optional<Status> ResetSpeakerPositions();
     std::optional<Status> SetOutputDevice(const std::string& DeviceName);
-    std::optional<Status> SetSpeakerMute(uint8_t SpeakerIndex, bool bMuted);
+    std::optional<Status> SetSpeakerMute(uint8 SpeakerIndex, bool bMuted);
     std::optional<Status> SetTestNoiseEnabled(bool bEnabled);
     std::optional<std::vector<AudioDeviceInfo>> RequestDevices();
     std::optional<std::vector<std::string>> RequestHrtfCatalog();
-    std::optional<Status> SetHrtfFile(uint8_t HrtfIndex);
+    std::optional<Status> SetHrtfFile(uint8 HrtfIndex);
 
 private:
     struct RawResponse
     {
         Opcode MessageOpcode;
-        std::vector<uint8_t> Payload;
+        std::vector<uint8> Payload;
     };
 
     // Sends a request and returns the response's opcode and raw payload
     // verbatim, without assuming what kind of response it is - shared by
     // SendStatusRequest() and RequestDevices(), which each decode it
     // differently.
-    std::optional<RawResponse> SendRawRequest(const std::vector<uint8_t>& Request);
+    std::optional<RawResponse> SendRawRequest(const std::vector<uint8>& Request);
 
     // Sends a request and decodes a StatusResponse from the reply.
-    std::optional<Status> SendStatusRequest(const std::vector<uint8_t>& Request);
+    std::optional<Status> SendStatusRequest(const std::vector<uint8>& Request);
 
     int SocketFd = -1;
 };

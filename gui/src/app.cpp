@@ -201,7 +201,7 @@ void App::DrawUI()
             const bool bSelected = i == CurrentHrtfIndex;
             if (ImGui::Selectable(HrtfCatalog[static_cast<size_t>(i)].c_str(), bSelected))
             {
-                if (auto Result = Client.SetHrtfFile(static_cast<uint8_t>(i)))
+                if (auto Result = Client.SetHrtfFile(static_cast<uint8>(i)))
                 {
                     LastStatus = *Result;
                 }
@@ -256,7 +256,7 @@ void App::DrawUI()
     // above does and reports the failure to the caller so a multi-command
     // sequence (Solo, Unmute all) stops rather than spamming a dead
     // connection.
-    auto SetSpeakerMuted = [&](uint8_t SpeakerIndex, bool bMuted) -> bool
+    auto SetSpeakerMuted = [&](uint8 SpeakerIndex, bool bMuted) -> bool
     {
         if (auto Result = Client.SetSpeakerMute(SpeakerIndex, bMuted))
         {
@@ -277,7 +277,7 @@ void App::DrawUI()
     // a caller sending more than one speaker's position (e.g. a mirrored
     // pair) must capture both speakers' target values up front rather than
     // reading them fresh between calls.
-    auto SendSpeakerPositionValues = [&](uint8_t SpeakerIndex, float AzimuthDegrees, float DistanceMeters)
+    auto SendSpeakerPositionValues = [&](uint8 SpeakerIndex, float AzimuthDegrees, float DistanceMeters)
     {
         if (auto Result = Client.SetSpeakerAzimuth(SpeakerIndex, AzimuthDegrees))
         {
@@ -317,10 +317,10 @@ void App::DrawUI()
             MirrorAzimuth = LastStatus.SpeakerAzimuthDegrees[static_cast<size_t>(MirrorIndex)];
             MirrorDistance = LastStatus.SpeakerDistanceMeters[static_cast<size_t>(MirrorIndex)];
         }
-        SendSpeakerPositionValues(static_cast<uint8_t>(PrimaryIndex), PrimaryAzimuth, PrimaryDistance);
+        SendSpeakerPositionValues(static_cast<uint8>(PrimaryIndex), PrimaryAzimuth, PrimaryDistance);
         if (MirrorIndex >= 0 && bConnected)
         {
-            SendSpeakerPositionValues(static_cast<uint8_t>(MirrorIndex), MirrorAzimuth, MirrorDistance);
+            SendSpeakerPositionValues(static_cast<uint8>(MirrorIndex), MirrorAzimuth, MirrorDistance);
         }
     };
 
@@ -368,7 +368,7 @@ void App::DrawUI()
 
     if (MuteToggledIndex >= 0)
     {
-        SetSpeakerMuted(static_cast<uint8_t>(MuteToggledIndex),
+        SetSpeakerMuted(static_cast<uint8>(MuteToggledIndex),
                          !LastStatus.SpeakerMuted[static_cast<size_t>(MuteToggledIndex)]);
     }
 
@@ -376,9 +376,9 @@ void App::DrawUI()
     {
         // Mute every other speaker and unmute this one so it can be heard
         // in isolation; stop early if the connection drops.
-        for (uint8_t j = 0; j < SpeakerCount && bConnected; ++j)
+        for (uint8 j = 0; j < SpeakerCount && bConnected; ++j)
         {
-            if (!SetSpeakerMuted(j, j != static_cast<uint8_t>(SoloIndex)))
+            if (!SetSpeakerMuted(j, j != static_cast<uint8>(SoloIndex)))
             {
                 break;
             }
@@ -401,7 +401,7 @@ void App::DrawUI()
     ImGui::SameLine();
     if (ImGui::Button("Unmute all"))
     {
-        for (uint8_t i = 0; i < SpeakerCount && bConnected; ++i)
+        for (uint8 i = 0; i < SpeakerCount && bConnected; ++i)
         {
             if (!SetSpeakerMuted(i, false))
             {

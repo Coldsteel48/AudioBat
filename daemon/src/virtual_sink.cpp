@@ -78,7 +78,7 @@ bool VirtualSink::Start()
         return false;
     }
 
-    uint8_t Buffer[1024];
+    uint8 Buffer[1024];
     spa_pod_builder Builder = SPA_POD_BUILDER_INIT(Buffer, sizeof(Buffer));
 
     spa_audio_info_raw Info{};
@@ -122,11 +122,11 @@ void VirtualSink::HandleProcess()
     }
 
     spa_buffer* Buf = PwBuffer->buffer;
-    const uint8_t* Data = static_cast<const uint8_t*>(Buf->datas[0].data);
+    const uint8* Data = static_cast<const uint8*>(Buf->datas[0].data);
     if (Data && Buf->datas[0].chunk)
     {
-        const uint32_t Stride = sizeof(float) * Channels;
-        const uint32_t Frames = Buf->datas[0].chunk->size / Stride;
+        const uint32 Stride = sizeof(float) * Channels;
+        const uint32 Frames = Buf->datas[0].chunk->size / Stride;
         if (Callback && Frames > 0)
         {
             Callback(reinterpret_cast<const float*>(Data), Frames);

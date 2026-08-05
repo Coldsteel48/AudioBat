@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "ambisonics_stage.hpp"
+#include "audiobat/types.hpp"
 #include "dsp_stage.hpp"
 #include "hrtf_loader.hpp"
 #include "partitioned_convolver.hpp"
@@ -27,7 +28,7 @@ class BinauralVoice;
 
 // Which kind of HRTF source BinauralStage renders its virtual speakers
 // through - see data/hrtf/README.md for what's bundled under each.
-enum class HrtfSourceKind : uint8_t
+enum class HrtfSourceKind : uint8
 {
     SofaFile,              // measured HRIR data, loaded via HrtfLoader/libmysofa
     SyntheticSphericalHead, // procedural rigid-sphere model, no data file at all
@@ -83,11 +84,11 @@ public:
     // BinauralStage (e.g. hrtf_deck.cpp, via shared_ptr) fails to compile.
     ~BinauralStage() override;
 
-    void Process(const float* Input, uint32_t InputChannels,
-                 float* Output, uint32_t OutputChannels,
-                 uint32_t Frames) override;
+    void Process(const float* Input, uint32 InputChannels,
+                 float* Output, uint32 OutputChannels,
+                 uint32 Frames) override;
 
-    static constexpr uint32_t VirtualSpeakerCount = 8;
+    static constexpr uint32 VirtualSpeakerCount = 8;
 
     // Callable from any thread. Just publishes the new toggle state for
     // Process() to crossfade toward on its next call - see class comment.
@@ -142,11 +143,11 @@ private:
     // reimplementation. Input/Output are already known to be 8/2-channel
     // interleaved and Frames already clamped by the time Process() calls
     // this.
-    void RenderOriginalPath(const float* Input, float* Output, uint32_t Frames);
+    void RenderOriginalPath(const float* Input, float* Output, uint32 Frames);
 
     // --- Near-field path (additive) ---
 
-    void RenderNearFieldPath(const float* Input, float* Output, uint32_t Frames);
+    void RenderNearFieldPath(const float* Input, float* Output, uint32 Frames);
 
     HrtfSourceKind SourceKind;
 
@@ -172,8 +173,8 @@ private:
     // thread.
     std::atomic<bool> bNearFieldRequested;
     bool bNearFieldActive;
-    uint32_t ToggleFadeFramesRemaining = 0;
-    const uint32_t ToggleCrossfadeFrames; // ~50ms of frames at construction SampleRate
+    uint32 ToggleFadeFramesRemaining = 0;
+    const uint32 ToggleCrossfadeFrames; // ~50ms of frames at construction SampleRate
 
     // Holds each path's output during a toggle transition, so they can be
     // blended - sized once against MaxProcessFrames.

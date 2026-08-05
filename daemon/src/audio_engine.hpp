@@ -17,6 +17,7 @@
 
 #include "audiobat/protocol.hpp"
 #include "audiobat/ring_buffer.hpp"
+#include "audiobat/types.hpp"
 #include "dsp/speaker_layout.hpp"
 #include "hrtf_catalog.hpp"
 #include "settings_store.hpp"
@@ -71,9 +72,9 @@ private:
     // destroyed before pw_deinit().
     void Teardown();
 
-    void HandleVirtualSinkAudio(const float* Interleaved, uint32_t Frames);
-    uint32_t HandleHardwareOutputRequest(float* Interleaved, uint32_t Frames);
-    std::vector<uint8_t> HandleControlCommand(const Command& InCommand);
+    void HandleVirtualSinkAudio(const float* Interleaved, uint32 Frames);
+    uint32 HandleHardwareOutputRequest(float* Interleaved, uint32 Frames);
+    std::vector<uint8> HandleControlCommand(const Command& InCommand);
 
     // Saves CurrentStatus (as returned to the control client) plus the
     // HRTF display name it maps to via RuntimeHrtfCatalog. Called from
@@ -85,7 +86,7 @@ private:
     // in-place. Snapshots mute flags once per block, same pattern as
     // SpeakerLayout::SnapshotDirections - mute state only changes from
     // control commands, never at audio rate.
-    void ApplySpeakerMute(float* Interleaved, uint32_t Frames);
+    void ApplySpeakerMute(float* Interleaved, uint32 Frames);
 
     // Scales each non-LFE channel by an inverse-distance loudness falloff
     // (1.0 at ReferenceSpeakerDistanceMeters, louder when closer, quieter
@@ -93,13 +94,13 @@ private:
     // in every spatial mode (unlike the near-field ILD filter, which is
     // Advanced-only inside BinauralStage) since it's just a gain, no
     // per-ear meaning required - see docs/near-field-distance-plan.md.
-    void ApplyNearFieldLoudnessFalloff(float* Interleaved, uint32_t Frames);
+    void ApplyNearFieldLoudnessFalloff(float* Interleaved, uint32 Frames);
 
     // Fills Interleaved with decorrelated white noise on every non-LFE
     // channel (LFE stays silent), for speaker-calibration purposes:
     // combined with ApplySpeakerMute, lets the user isolate one physical
     // speaker at a time regardless of what's actually playing.
-    void FillTestNoise(float* Interleaved, uint32_t Frames);
+    void FillTestNoise(float* Interleaved, uint32 Frames);
 
     // Returns whichever concrete stage Mode currently selects.
     DspStage& ActiveStage();
@@ -159,7 +160,7 @@ private:
     // timer, so new/removed files are picked up immediately. Runs on the
     // PipeWire main loop thread - see HrtfCatalogMutex's doc comment for
     // why that matters.
-    static void OnHrtfDirectoryChanged(void* Data, int Fd, uint32_t Mask);
+    static void OnHrtfDirectoryChanged(void* Data, int Fd, uint32 Mask);
 
     bool bPipeWireInitialized = false;
     pw_main_loop* MainLoop = nullptr;
@@ -187,7 +188,7 @@ private:
 
     // State for FillTestNoise()'s xorshift32 PRNG; advanced once per
     // generated sample. Only ever touched from the realtime audio thread.
-    uint32_t NoiseState = 0x9E3779B9u;
+    uint32 NoiseState = 0x9E3779B9u;
 
     std::unique_ptr<PassthroughStage> OffStage;
     std::unique_ptr<AmbisonicsStage> BasicStage;
@@ -205,7 +206,7 @@ private:
     // HrtfDeck's lock-free Slot/Publish pattern) is fine here.
     std::mutex HrtfCatalogMutex;
     std::vector<HrtfCatalogEntry> RuntimeHrtfCatalog;
-    std::atomic<uint8_t> ActiveHrtfIndex{0};
+    std::atomic<uint8> ActiveHrtfIndex{0};
 
     // Resolved once in Run() by ResolveUserHrtfDirectory(); re-scanned by
     // RebuildHrtfCatalog() on every OnHrtfDirectoryChanged callback.

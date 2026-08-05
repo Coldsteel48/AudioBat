@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 
+#include "audiobat/types.hpp"
 #include "binaural_stage.hpp"
 #include "crossfading_slot.hpp"
 #include "dsp_stage.hpp"
@@ -36,9 +37,9 @@ public:
     HrtfDeck(const SpeakerLayout& InLayout, HrtfSourceKind Kind, const std::string& SofaPath, float SampleRate,
              bool bInitialNearFieldEnabled);
 
-    void Process(const float* Input, uint32_t InputChannels,
-                 float* Output, uint32_t OutputChannels,
-                 uint32_t Frames) override;
+    void Process(const float* Input, uint32 InputChannels,
+                 float* Output, uint32 OutputChannels,
+                 uint32 Frames) override;
 
     // Not realtime-safe: builds a brand-new BinauralStage synchronously
     // (SOFA parse + convolver setup - same "call once, not from
@@ -69,7 +70,7 @@ private:
     float SampleRate;
     std::atomic<bool> bNearFieldEnabled{false};
 
-    static constexpr uint32_t ChannelsPerFrame = 2; // stereo output
+    static constexpr uint32 ChannelsPerFrame = 2; // stereo output
 
     CrossfadingSlot<BinauralStage> Slot;
 };

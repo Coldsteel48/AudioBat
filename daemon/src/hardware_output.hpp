@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include <cstdint>
 #include <functional>
 #include <string>
+
+#include "audiobat/types.hpp"
 
 struct pw_stream;
 struct pw_loop;
@@ -27,14 +28,14 @@ namespace audiobat
 class HardwareOutput
 {
 public:
-    static constexpr uint32_t Channels = 2;
-    static constexpr uint32_t SampleRate = 48000;
+    static constexpr uint32 Channels = 2;
+    static constexpr uint32 SampleRate = 48000;
 
     // Called on the PipeWire realtime thread when PipeWire needs more
     // audio. Implementations should fill up to `Frames` interleaved stereo
     // frames into `Interleaved` and return how many frames were written;
     // anything left unwritten is zero-filled by the caller.
-    using FillCallback = std::function<uint32_t(float* Interleaved, uint32_t Frames)>;
+    using FillCallback = std::function<uint32(float* Interleaved, uint32 Frames)>;
 
     // InTargetNodeName: PipeWire node.name of the real hardware sink to
     // pin to (e.g. "alsa_output.usb-SteelSeries_Arctis_7P_-00.analog-stereo",

@@ -9,9 +9,10 @@
 #pragma once
 
 #include <cmath>
-#include <cstdint>
 #include <numbers>
 #include <vector>
+
+#include "audiobat/types.hpp"
 
 namespace audiobat
 {
@@ -58,12 +59,12 @@ inline float LateralAngleDegrees(float NormalizedAzimuthDegrees)
 // shelf; near_field_filter.cpp scales and offsets it into a boost shelf
 // (see BuildBoostShelf there). Not itself scaled by any gain - callers
 // multiply/combine as needed.
-inline std::vector<float> BuildUnityGainLowpassIR(float CutoffHz, float SampleRate, uint32_t TapCount)
+inline std::vector<float> BuildUnityGainLowpassIR(float CutoffHz, float SampleRate, uint32 TapCount)
 {
     const float Pole = std::exp(-2.0f * std::numbers::pi_v<float> * CutoffHz / SampleRate);
     std::vector<float> Taps(TapCount);
     float PolePower = 1.0f;
-    for (uint32_t n = 0; n < TapCount; ++n)
+    for (uint32 n = 0; n < TapCount; ++n)
     {
         Taps[n] = (1.0f - Pole) * PolePower;
         PolePower *= Pole;

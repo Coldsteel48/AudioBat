@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include <cstdint>
 #include <functional>
+
+#include "audiobat/types.hpp"
 
 struct pw_stream;
 struct pw_loop;
@@ -27,8 +28,8 @@ namespace audiobat
 class VirtualSink
 {
 public:
-    static constexpr uint32_t Channels = 8; // 7.1: FL, FR, FC, LFE, RL, RR, SL, SR
-    static constexpr uint32_t SampleRate = 48000;
+    static constexpr uint32 Channels = 8; // 7.1: FL, FR, FC, LFE, RL, RR, SL, SR
+    static constexpr uint32 SampleRate = 48000;
 
     // PipeWire node.name this stream registers under; also Audio/Sink, so
     // DeviceRegistry filters it out of the selectable hardware output list
@@ -38,7 +39,7 @@ public:
 
     // Called on the PipeWire realtime thread whenever a block of
     // interleaved float audio (Channels per frame) arrives.
-    using AudioCallback = std::function<void(const float* Interleaved, uint32_t Frames)>;
+    using AudioCallback = std::function<void(const float* Interleaved, uint32 Frames)>;
 
     explicit VirtualSink(pw_loop* InLoop);
     ~VirtualSink();

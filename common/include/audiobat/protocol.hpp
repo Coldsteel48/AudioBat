@@ -10,10 +10,11 @@
 
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
+
+#include "audiobat/types.hpp"
 
 namespace audiobat
 {
@@ -32,7 +33,7 @@ namespace audiobat
 // can be swapped later (different opcode set, different framing) without
 // touching daemon or GUI logic built on top of it.
 
-enum class Opcode : uint8_t
+enum class Opcode : uint8
 {
     // Requests
     GetStatus = 0x01,
@@ -59,7 +60,7 @@ enum class Opcode : uint8_t
 // (AmbisonicsStage); Advanced is HRTF-based binaural decode
 // (BinauralStage). All three sit behind the same DspStage interface, so
 // switching modes is just changing which stage AudioEngine dispatches to.
-enum class SpatialMode : uint8_t
+enum class SpatialMode : uint8
 {
     Off = 0,
     Basic = 1,
@@ -69,7 +70,7 @@ enum class SpatialMode : uint8_t
 struct MessageHeader
 {
     Opcode MessageOpcode;
-    uint16_t PayloadLength;
+    uint16 PayloadLength;
 };
 
 inline constexpr size_t HeaderSize = 3;
@@ -104,12 +105,12 @@ struct Command
 {
     Opcode CommandOpcode = Opcode::GetStatus;
     SpatialMode ModeValue = SpatialMode::Off; // valid when CommandOpcode == SetSpatialMode
-    uint8_t SpeakerIndex = 0;     // valid when CommandOpcode == SetSpeakerAzimuth, SetSpeakerMute, or SetSpeakerDistance, 0..SpeakerCount-1
+    uint8 SpeakerIndex = 0;     // valid when CommandOpcode == SetSpeakerAzimuth, SetSpeakerMute, or SetSpeakerDistance, 0..SpeakerCount-1
     float AzimuthDegrees = 0.0f;  // valid when CommandOpcode == SetSpeakerAzimuth
     bool bMuted = false;          // valid when CommandOpcode == SetSpeakerMute
     bool bTestNoiseEnabled = false; // valid when CommandOpcode == SetTestNoise
     std::string OutputDeviceName; // valid when CommandOpcode == SetOutputDevice
-    uint8_t HrtfIndex = 0;         // valid when CommandOpcode == SetHrtfFile
+    uint8 HrtfIndex = 0;         // valid when CommandOpcode == SetHrtfFile
     float DistanceMeters = 0.0f;  // valid when CommandOpcode == SetSpeakerDistance
     bool bNearFieldEnabled = false; // valid when CommandOpcode == SetNearFieldEnabled
 };
@@ -121,7 +122,7 @@ struct Status
     std::array<bool, SpeakerCount> SpeakerMuted{};
     bool bTestNoiseEnabled = false;
     std::string OutputDeviceName; // node.name of the currently pinned hardware output sink
-    uint8_t ActiveHrtfIndex = 0;  // index into the GetHrtfCatalog list Advanced mode is rendering through
+    uint8 ActiveHrtfIndex = 0;  // index into the GetHrtfCatalog list Advanced mode is rendering through
     std::array<float, SpeakerCount> SpeakerDistanceMeters{};
     bool bNearFieldEnabled = false; // whether distance affects loudness (all modes) and ILD (Advanced mode)
 };
@@ -138,67 +139,67 @@ struct AudioDeviceInfo
 // Attempts to read a header from the front of `Buffer`. Returns nullopt if
 // fewer than HeaderSize bytes are available yet (caller should wait for
 // more data on the socket).
-std::optional<MessageHeader> TryReadHeader(const uint8_t* Buffer, size_t Available);
+std::optional<MessageHeader> TryReadHeader(const uint8* Buffer, size_t Available);
 
 // Decodes a request payload for the given opcode. `Payload` must point at
 // exactly `PayloadLength` valid bytes. Returns nullopt if the opcode isn't
 // a request or the payload doesn't match what that opcode expects.
-std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8_t* Payload, uint16_t PayloadLength);
+std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8* Payload, uint16 PayloadLength);
 
 // Decodes a StatusResponse payload. Used by control clients (GUI, test
 // tools) to parse what the daemon sends back; the daemon only encodes
 // responses, it doesn't decode them. Returns nullopt if PayloadLength
 // doesn't match the expected `1 + 4*SpeakerCount` layout.
-std::optional<Status> DecodeStatusResponse(const uint8_t* Payload, uint16_t PayloadLength);
+std::optional<Status> DecodeStatusResponse(const uint8* Payload, uint16 PayloadLength);
 
 // Decodes an ErrorResponse payload into its message string.
-std::string DecodeErrorResponse(const uint8_t* Payload, uint16_t PayloadLength);
+std::string DecodeErrorResponse(const uint8* Payload, uint16 PayloadLength);
 
 // Decodes a DeviceListResponse payload. Used by control clients (GUI, test
 // tools) to parse what the daemon sends back. Returns nullopt if the
 // payload is truncated or malformed.
-std::optional<std::vector<AudioDeviceInfo>> DecodeDeviceListResponse(const uint8_t* Payload,
-                                                                       uint16_t PayloadLength);
+std::optional<std::vector<AudioDeviceInfo>> DecodeDeviceListResponse(const uint8* Payload,
+                                                                       uint16 PayloadLength);
 
 // Decodes an HrtfCatalogResponse payload into the ordered list of display
 // names; an entry's index into this list is what SetHrtfFile's HrtfIndex
 // and Status's ActiveHrtfIndex refer to. Returns nullopt if the payload is
 // truncated or malformed.
-std::optional<std::vector<std::string>> DecodeHrtfCatalogResponse(const uint8_t* Payload,
-                                                                     uint16_t PayloadLength);
+std::optional<std::vector<std::string>> DecodeHrtfCatalogResponse(const uint8* Payload,
+                                                                     uint16 PayloadLength);
 
 // Encodes a full status response message (header + payload), ready to
 // write directly to the socket.
-std::vector<uint8_t> EncodeStatusResponse(const Status& InStatus);
+std::vector<uint8> EncodeStatusResponse(const Status& InStatus);
 
 // Encodes a full error response message (header + payload), ready to
 // write directly to the socket.
-std::vector<uint8_t> EncodeErrorResponse(const std::string& Message);
+std::vector<uint8> EncodeErrorResponse(const std::string& Message);
 
 // Encodes a full device list response message (header + payload), ready to
 // write directly to the socket. Entries that would push the payload past
 // MaxPayloadSize are dropped from the end rather than truncated mid-entry.
-std::vector<uint8_t> EncodeDeviceListResponse(const std::vector<AudioDeviceInfo>& Devices);
+std::vector<uint8> EncodeDeviceListResponse(const std::vector<AudioDeviceInfo>& Devices);
 
 // Encodes a full HRTF catalog response message (header + payload), ready
 // to write directly to the socket. Same truncate-whole-entries behavior
 // as EncodeDeviceListResponse if the list would exceed MaxPayloadSize.
-std::vector<uint8_t> EncodeHrtfCatalogResponse(const std::vector<std::string>& DisplayNames);
+std::vector<uint8> EncodeHrtfCatalogResponse(const std::vector<std::string>& DisplayNames);
 
 // Encodes a full request message. Used by control clients (GUI, test
 // tools); the daemon only decodes requests, it doesn't encode them.
-std::vector<uint8_t> EncodeGetStatusRequest();
-std::vector<uint8_t> EncodeSetSpatialModeRequest(SpatialMode Mode);
-std::vector<uint8_t> EncodeSetSpeakerAzimuthRequest(uint8_t SpeakerIndex, float AzimuthDegrees);
-std::vector<uint8_t> EncodeGetDevicesRequest();
-std::vector<uint8_t> EncodeSetOutputDeviceRequest(const std::string& DeviceName);
-std::vector<uint8_t> EncodeResetSpeakerPositionsRequest();
-std::vector<uint8_t> EncodeSetSpeakerMuteRequest(uint8_t SpeakerIndex, bool bMuted);
-std::vector<uint8_t> EncodeSetTestNoiseRequest(bool bEnabled);
-std::vector<uint8_t> EncodeGetHrtfCatalogRequest();
-std::vector<uint8_t> EncodeSetHrtfFileRequest(uint8_t HrtfIndex);
-std::vector<uint8_t> EncodeSetSpeakerDistanceRequest(uint8_t SpeakerIndex, float DistanceMeters);
-std::vector<uint8_t> EncodeSetNearFieldEnabledRequest(bool bEnabled);
+std::vector<uint8> EncodeGetStatusRequest();
+std::vector<uint8> EncodeSetSpatialModeRequest(SpatialMode Mode);
+std::vector<uint8> EncodeSetSpeakerAzimuthRequest(uint8 SpeakerIndex, float AzimuthDegrees);
+std::vector<uint8> EncodeGetDevicesRequest();
+std::vector<uint8> EncodeSetOutputDeviceRequest(const std::string& DeviceName);
+std::vector<uint8> EncodeResetSpeakerPositionsRequest();
+std::vector<uint8> EncodeSetSpeakerMuteRequest(uint8 SpeakerIndex, bool bMuted);
+std::vector<uint8> EncodeSetTestNoiseRequest(bool bEnabled);
+std::vector<uint8> EncodeGetHrtfCatalogRequest();
+std::vector<uint8> EncodeSetHrtfFileRequest(uint8 HrtfIndex);
+std::vector<uint8> EncodeSetSpeakerDistanceRequest(uint8 SpeakerIndex, float DistanceMeters);
+std::vector<uint8> EncodeSetNearFieldEnabledRequest(bool bEnabled);
 
 // Resolves the default control socket path: $XDG_RUNTIME_DIR/audiobat/control.sock,
 // falling back to /tmp/audiobat-<uid>/control.sock if XDG_RUNTIME_DIR isn't set.

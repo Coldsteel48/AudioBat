@@ -29,13 +29,13 @@ PartitionedConvolver::~PartitionedConvolver()
     kiss_fftr_free(InversePlan);
 }
 
-void PartitionedConvolver::Load(const float* Taps, uint32_t TapCount)
+void PartitionedConvolver::Load(const float* Taps, uint32 TapCount)
 {
     // FftSize must cover the filter length plus one block of new samples
     // (N >= M + L - 1) for overlap-save's valid output region to fully
     // cover the L newest samples each step; kiss_fftr_next_fast_size_real
     // rounds up to a size KissFFT's real-FFT can factor efficiently.
-    FftSize = static_cast<uint32_t>(
+    FftSize = static_cast<uint32>(
         kiss_fftr_next_fast_size_real(static_cast<int>(TapCount + BlockSamples - 1)));
 
     kiss_fftr_free(ForwardPlan);
@@ -43,7 +43,7 @@ void PartitionedConvolver::Load(const float* Taps, uint32_t TapCount)
     ForwardPlan = kiss_fftr_alloc(static_cast<int>(FftSize), 0, nullptr, nullptr);
     InversePlan = kiss_fftr_alloc(static_cast<int>(FftSize), 1, nullptr, nullptr);
 
-    const uint32_t FreqBins = FftSize / 2 + 1;
+    const uint32 FreqBins = FftSize / 2 + 1;
     FilterFreq.assign(FreqBins, kiss_fft_cpx{0.0f, 0.0f});
     FreqScratch.assign(FreqBins, kiss_fft_cpx{0.0f, 0.0f});
     TimeScratch.assign(FftSize, 0.0f);
@@ -59,7 +59,7 @@ void PartitionedConvolver::Load(const float* Taps, uint32_t TapCount)
     // (can't happen given how FftSize was sized above, but guards against
     // a caller passing something unexpected).
     std::vector<float> PaddedFilter(FftSize, 0.0f);
-    const uint32_t CopyCount = std::min(TapCount, FftSize);
+    const uint32 CopyCount = std::min(TapCount, FftSize);
     std::copy(Taps, Taps + CopyCount, PaddedFilter.begin());
     kiss_fftr(ForwardPlan, PaddedFilter.data(), FilterFreq.data());
 }
@@ -83,7 +83,7 @@ void PartitionedConvolver::RunOneBlock()
     // FftSize); the valid overlap-save region is the last BlockSamples
     // samples of the circular result.
     const float Normalization = 1.0f / static_cast<float>(FftSize);
-    for (uint32_t i = 0; i < BlockSamples; ++i)
+    for (uint32 i = 0; i < BlockSamples; ++i)
     {
         PendingOutput[i] = TimeScratch[FftSize - BlockSamples + i] * Normalization;
     }
@@ -92,10 +92,10 @@ void PartitionedConvolver::RunOneBlock()
     PendingInputCount = 0;
 }
 
-void PartitionedConvolver::ProcessAccumulate(const float* Input, float* Output, uint32_t Frames)
+void PartitionedConvolver::ProcessAccumulate(const float* Input, float* Output, uint32 Frames)
 {
-    uint32_t InputConsumed = 0;
-    uint32_t OutputProduced = 0;
+    uint32 InputConsumed = 0;
+    uint32 OutputProduced = 0;
 
     while (OutputProduced < Frames)
     {

@@ -26,7 +26,7 @@ namespace
 // daemon while still failing fast if it's hung or gone.
 constexpr int TimeoutMs = 200;
 
-bool RecvExact(int Fd, uint8_t* Out, size_t Count)
+bool RecvExact(int Fd, uint8* Out, size_t Count)
 {
     size_t Received = 0;
     while (Received < Count)
@@ -86,7 +86,7 @@ void ControlClient::Disconnect()
     }
 }
 
-std::optional<ControlClient::RawResponse> ControlClient::SendRawRequest(const std::vector<uint8_t>& Request)
+std::optional<ControlClient::RawResponse> ControlClient::SendRawRequest(const std::vector<uint8>& Request)
 {
     if (!IsConnected())
     {
@@ -100,7 +100,7 @@ std::optional<ControlClient::RawResponse> ControlClient::SendRawRequest(const st
         return std::nullopt;
     }
 
-    uint8_t HeaderBytes[HeaderSize];
+    uint8 HeaderBytes[HeaderSize];
     if (!RecvExact(SocketFd, HeaderBytes, HeaderSize))
     {
         Disconnect();
@@ -113,7 +113,7 @@ std::optional<ControlClient::RawResponse> ControlClient::SendRawRequest(const st
         return std::nullopt;
     }
 
-    std::vector<uint8_t> Payload(Header->PayloadLength);
+    std::vector<uint8> Payload(Header->PayloadLength);
     if (!Payload.empty() && !RecvExact(SocketFd, Payload.data(), Payload.size()))
     {
         Disconnect();
@@ -123,7 +123,7 @@ std::optional<ControlClient::RawResponse> ControlClient::SendRawRequest(const st
     return RawResponse{Header->MessageOpcode, std::move(Payload)};
 }
 
-std::optional<Status> ControlClient::SendStatusRequest(const std::vector<uint8_t>& Request)
+std::optional<Status> ControlClient::SendStatusRequest(const std::vector<uint8>& Request)
 {
     auto Response = SendRawRequest(Request);
     if (!Response)
@@ -138,7 +138,7 @@ std::optional<Status> ControlClient::SendStatusRequest(const std::vector<uint8_t
     }
 
     auto DecodedStatus = DecodeStatusResponse(Response->Payload.data(),
-                                               static_cast<uint16_t>(Response->Payload.size()));
+                                               static_cast<uint16>(Response->Payload.size()));
     if (!DecodedStatus)
     {
         Disconnect();
@@ -157,12 +157,12 @@ std::optional<Status> ControlClient::SetSpatialMode(SpatialMode Mode)
     return SendStatusRequest(EncodeSetSpatialModeRequest(Mode));
 }
 
-std::optional<Status> ControlClient::SetSpeakerAzimuth(uint8_t SpeakerIndex, float AzimuthDegrees)
+std::optional<Status> ControlClient::SetSpeakerAzimuth(uint8 SpeakerIndex, float AzimuthDegrees)
 {
     return SendStatusRequest(EncodeSetSpeakerAzimuthRequest(SpeakerIndex, AzimuthDegrees));
 }
 
-std::optional<Status> ControlClient::SetSpeakerDistance(uint8_t SpeakerIndex, float DistanceMeters)
+std::optional<Status> ControlClient::SetSpeakerDistance(uint8 SpeakerIndex, float DistanceMeters)
 {
     return SendStatusRequest(EncodeSetSpeakerDistanceRequest(SpeakerIndex, DistanceMeters));
 }
@@ -182,7 +182,7 @@ std::optional<Status> ControlClient::SetOutputDevice(const std::string& DeviceNa
     return SendStatusRequest(EncodeSetOutputDeviceRequest(DeviceName));
 }
 
-std::optional<Status> ControlClient::SetSpeakerMute(uint8_t SpeakerIndex, bool bMuted)
+std::optional<Status> ControlClient::SetSpeakerMute(uint8 SpeakerIndex, bool bMuted)
 {
     return SendStatusRequest(EncodeSetSpeakerMuteRequest(SpeakerIndex, bMuted));
 }
@@ -201,7 +201,7 @@ std::optional<std::vector<AudioDeviceInfo>> ControlClient::RequestDevices()
     }
 
     auto DecodedDevices = DecodeDeviceListResponse(Response->Payload.data(),
-                                                     static_cast<uint16_t>(Response->Payload.size()));
+                                                     static_cast<uint16>(Response->Payload.size()));
     if (!DecodedDevices)
     {
         Disconnect();
@@ -219,7 +219,7 @@ std::optional<std::vector<std::string>> ControlClient::RequestHrtfCatalog()
     }
 
     auto DecodedCatalog = DecodeHrtfCatalogResponse(Response->Payload.data(),
-                                                      static_cast<uint16_t>(Response->Payload.size()));
+                                                      static_cast<uint16>(Response->Payload.size()));
     if (!DecodedCatalog)
     {
         Disconnect();
@@ -228,7 +228,7 @@ std::optional<std::vector<std::string>> ControlClient::RequestHrtfCatalog()
     return DecodedCatalog;
 }
 
-std::optional<Status> ControlClient::SetHrtfFile(uint8_t HrtfIndex)
+std::optional<Status> ControlClient::SetHrtfFile(uint8 HrtfIndex)
 {
     return SendStatusRequest(EncodeSetHrtfFileRequest(HrtfIndex));
 }

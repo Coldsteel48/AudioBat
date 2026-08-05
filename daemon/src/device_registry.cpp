@@ -25,15 +25,15 @@ namespace audiobat
 namespace
 {
 
-void OnGlobalAdded(void* UserData, uint32_t Id, uint32_t Permissions, const char* Type,
-                    uint32_t Version, const spa_dict* Props)
+void OnGlobalAdded(void* UserData, uint32 Id, uint32 Permissions, const char* Type,
+                    uint32 Version, const spa_dict* Props)
 {
     (void)Permissions;
     (void)Version;
     static_cast<DeviceRegistry*>(UserData)->HandleGlobalAdded(Id, Type, Props);
 }
 
-void OnGlobalRemoved(void* UserData, uint32_t Id)
+void OnGlobalRemoved(void* UserData, uint32 Id)
 {
     static_cast<DeviceRegistry*>(UserData)->HandleGlobalRemoved(Id);
 }
@@ -55,7 +55,7 @@ struct CoreSyncState
     bool bDone = false;
 };
 
-void OnCoreDone(void* UserData, uint32_t Id, int Seq)
+void OnCoreDone(void* UserData, uint32 Id, int Seq)
 {
     auto* State = static_cast<CoreSyncState*>(UserData);
     if (Id == PW_ID_CORE && Seq == State->PendingSeq)
@@ -147,7 +147,7 @@ bool DeviceRegistry::WaitForInitialSync(int TimeoutMs)
     return State.bDone;
 }
 
-void DeviceRegistry::HandleGlobalAdded(uint32_t Id, const char* Type, const spa_dict* Props)
+void DeviceRegistry::HandleGlobalAdded(uint32 Id, const char* Type, const spa_dict* Props)
 {
     if (!Props)
     {
@@ -217,7 +217,7 @@ void DeviceRegistry::ClaimVirtualSinkAsDefault()
                               "Spa:String:JSON", Value);
 }
 
-void DeviceRegistry::HandleGlobalRemoved(uint32_t Id)
+void DeviceRegistry::HandleGlobalRemoved(uint32 Id)
 {
     std::lock_guard<std::mutex> Lock(DevicesMutex);
     DevicesById.erase(Id);
@@ -251,7 +251,7 @@ bool DeviceRegistry::HasDevice(const std::string& Name) const
 std::optional<std::string> DeviceRegistry::PickAnyDevice() const
 {
     std::lock_guard<std::mutex> Lock(DevicesMutex);
-    uint32_t LowestId = std::numeric_limits<uint32_t>::max();
+    uint32 LowestId = std::numeric_limits<uint32>::max();
     const AudioDeviceInfo* Picked = nullptr;
     for (const auto& [Id, Info] : DevicesById)
     {

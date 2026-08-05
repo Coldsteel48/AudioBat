@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <cstdint>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -18,6 +17,7 @@
 #include <spa/utils/hook.h>
 
 #include "audiobat/protocol.hpp"
+#include "audiobat/types.hpp"
 
 struct pw_loop;
 struct pw_context;
@@ -86,8 +86,8 @@ public:
     std::optional<std::string> PickAnyDevice() const;
 
     // pw_registry callback trampoline targets; not for external use.
-    void HandleGlobalAdded(uint32_t Id, const char* Type, const spa_dict* Props);
-    void HandleGlobalRemoved(uint32_t Id);
+    void HandleGlobalAdded(uint32 Id, const char* Type, const spa_dict* Props);
+    void HandleGlobalRemoved(uint32 Id);
 
 private:
     // Sets default.configured.audio.sink to VirtualSink::NodeName via the
@@ -105,7 +105,7 @@ private:
     pw_metadata* DefaultMetadata = nullptr;
 
     mutable std::mutex DevicesMutex;
-    std::unordered_map<uint32_t, AudioDeviceInfo> DevicesById;
+    std::unordered_map<uint32, AudioDeviceInfo> DevicesById;
 };
 
 } // namespace audiobat

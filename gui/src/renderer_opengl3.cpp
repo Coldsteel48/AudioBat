@@ -30,7 +30,7 @@ namespace
 class OpenGL3Renderer final : public IRenderer
 {
 public:
-    uint32_t GetSDLWindowFlags() const override
+    uint32 GetSDLWindowFlags() const override
     {
         return SDL_WINDOW_OPENGL;
     }

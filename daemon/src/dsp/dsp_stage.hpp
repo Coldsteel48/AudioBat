@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <cstdint>
+#include "audiobat/types.hpp"
 
 namespace audiobat
 {
@@ -27,9 +27,9 @@ public:
     // Processes one block of interleaved input audio into interleaved
     // output audio. Runs on the PipeWire realtime thread: implementations
     // must not allocate or block.
-    virtual void Process(const float* Input, uint32_t InputChannels,
-                          float* Output, uint32_t OutputChannels,
-                          uint32_t Frames) = 0;
+    virtual void Process(const float* Input, uint32 InputChannels,
+                          float* Output, uint32 OutputChannels,
+                          uint32 Frames) = 0;
 };
 
 // Upper bound on Frames passed to Process() in one call - mirrors how
@@ -37,6 +37,6 @@ public:
 // audio_engine.cpp). Stages that need their own per-block scratch memory
 // (e.g. BinauralStage's virtual speaker signals) size it against this
 // constant once, at construction, rather than allocating inside Process().
-inline constexpr uint32_t MaxProcessFrames = 8192;
+inline constexpr uint32 MaxProcessFrames = 8192;
 
 } // namespace audiobat

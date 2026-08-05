@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "audiobat/types.hpp"
 #include "binaural_stage.hpp" // HrtfSourceKind
 #include "crossfading_slot.hpp"
 #include "hrtf_loader.hpp"
@@ -26,7 +27,7 @@ public:
 
     // Realtime-safe. MonoInput/StereoOutput are Frames samples of 1 and 2
     // channels respectively (interleaved for the latter).
-    void Process(const float* MonoInput, float* StereoOutput, uint32_t Frames);
+    void Process(const float* MonoInput, float* StereoOutput, uint32 Frames);
 
 private:
     PartitionedConvolver LeftConvolver;
@@ -70,7 +71,7 @@ public:
                  float AzimuthDegrees, float DistanceMeters);
 
     // Realtime-safe.
-    void Process(const float* MonoInput, float* StereoOutput, uint32_t Frames);
+    void Process(const float* MonoInput, float* StereoOutput, uint32 Frames);
 
     // Not realtime-safe (may deallocate). See CrossfadingSlot::CollectGarbage.
     void CollectGarbage();
@@ -78,7 +79,7 @@ public:
 private:
     float SampleRate;
 
-    static constexpr uint32_t ChannelsPerFrame = 2; // stereo output
+    static constexpr uint32 ChannelsPerFrame = 2; // stereo output
 
     CrossfadingSlot<BinauralVoiceFilter> Slot;
 };

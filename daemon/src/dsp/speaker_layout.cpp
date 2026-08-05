@@ -12,6 +12,8 @@
 #include <cmath>
 #include <numbers>
 
+#include "audiobat/types.hpp"
+
 namespace audiobat
 {
 
@@ -72,7 +74,7 @@ bool SpeakerLayout::IsSpeakerMuted(SpeakerChannel Speaker) const
 
 void SpeakerLayout::ResetSpeakerPositions()
 {
-    for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
+    for (uint32 Speaker = 0; Speaker < SpeakerCount; ++Speaker)
     {
         SpeakerAzimuthDegrees[Speaker].store(DefaultSpeakerAzimuthDegrees[Speaker], std::memory_order_relaxed);
         SpeakerDistanceMeters[Speaker].store(DefaultSpeakerDistanceMeters, std::memory_order_relaxed);
@@ -82,7 +84,7 @@ void SpeakerLayout::ResetSpeakerPositions()
 SpeakerLayout::Directions SpeakerLayout::SnapshotDirections() const
 {
     Directions Dirs;
-    for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
+    for (uint32 Speaker = 0; Speaker < SpeakerCount; ++Speaker)
     {
         const float AzimuthRadians = SpeakerAzimuthDegrees[Speaker].load(std::memory_order_relaxed) * DegToRad;
         Dirs.Cos[Speaker] = std::cos(AzimuthRadians);
@@ -97,7 +99,7 @@ void SpeakerLayout::Encode(const float Sources[SpeakerCount], const Directions& 
     OutFieldW = 0.0f;
     OutFieldX = 0.0f;
     OutFieldY = 0.0f;
-    for (uint32_t Speaker = 0; Speaker < SpeakerCount; ++Speaker)
+    for (uint32 Speaker = 0; Speaker < SpeakerCount; ++Speaker)
     {
         OutFieldW += Sources[Speaker] * OneOverSqrtTwo;
         OutFieldX += Sources[Speaker] * Dirs.Cos[Speaker];
