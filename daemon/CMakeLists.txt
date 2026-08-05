@@ -1,7 +1,7 @@
-# AudioBat
+# RamkolFX
 # Copyright (C) 2026 Roman Levin (Coldsteel48)
 #
-# This file is part of AudioBat, dual-licensed under the GNU General
+# This file is part of RamkolFX, dual-licensed under the GNU General
 # Public License v3.0 (see LICENSE) or a separate commercial license
 # (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 # terms of the Contributor License Agreement (see CLA.md).
@@ -41,8 +41,8 @@ FetchContent_MakeAvailable(kissfft)
 
 # Absolute path to the bundled default HRTF SOFA file (see
 # data/hrtf/README.md), baked in as the fallback when the
-# AUDIOBAT_HRTF_SOFA environment variable isn't set.
-set(AUDIOBAT_DEFAULT_HRTF_SOFA_PATH "${CMAKE_SOURCE_DIR}/data/hrtf/default.sofa")
+# RAMKOLFX_HRTF_SOFA environment variable isn't set.
+set(RAMKOLFX_DEFAULT_HRTF_SOFA_PATH "${CMAKE_SOURCE_DIR}/data/hrtf/default.sofa")
 configure_file(
     src/hrtf_default_path.hpp.in
     ${CMAKE_CURRENT_BINARY_DIR}/generated/hrtf_default_path.hpp
@@ -55,14 +55,14 @@ configure_file(
 # deliberately avoids bundling), and the license-free synthetic
 # spherical-head model. AudioEngine filters this list down to entries
 # that are actually present on disk at startup.
-set(AUDIOBAT_HRTF_CATALOG_ENTRIES
+set(RAMKOLFX_HRTF_CATALOG_ENTRIES
     "    { \"MIT KEMAR (normal pinna)\", HrtfSourceKind::SofaFile, \"${CMAKE_SOURCE_DIR}/data/hrtf/default.sofa\" },\n")
-set(AUDIOBAT_SADIE_SUBJECTS H3 H5 H8 H10 H13 H15 H18 H20)
-foreach(SUBJECT ${AUDIOBAT_SADIE_SUBJECTS})
-    string(APPEND AUDIOBAT_HRTF_CATALOG_ENTRIES
+set(RAMKOLFX_SADIE_SUBJECTS H3 H5 H8 H10 H13 H15 H18 H20)
+foreach(SUBJECT ${RAMKOLFX_SADIE_SUBJECTS})
+    string(APPEND RAMKOLFX_HRTF_CATALOG_ENTRIES
         "    { \"SADIE II - ${SUBJECT}\", HrtfSourceKind::SofaFile, \"${CMAKE_SOURCE_DIR}/data/hrtf/sadie/sadie_${SUBJECT}.sofa\" },\n")
 endforeach()
-string(APPEND AUDIOBAT_HRTF_CATALOG_ENTRIES
+string(APPEND RAMKOLFX_HRTF_CATALOG_ENTRIES
     "    { \"Synthetic spherical head\", HrtfSourceKind::SyntheticSphericalHead, \"\" },\n")
 
 configure_file(
@@ -71,7 +71,7 @@ configure_file(
     @ONLY
 )
 
-add_executable(audiobatd
+add_executable(ramkolfxd
     src/main.cpp
     src/audio_engine.cpp
     src/virtual_sink.cpp
@@ -93,14 +93,14 @@ add_executable(audiobatd
     src/control/control_server.cpp
 )
 
-target_include_directories(audiobatd PRIVATE
+target_include_directories(ramkolfxd PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}/generated
     ${CMAKE_CURRENT_SOURCE_DIR}/src # so the generated headers above can #include "dsp/..." like everything else does
     ${mysofa_BINARY_DIR}/src # generated mysofa_export.h, not part of mysofa-static's public interface
 )
 
-target_link_libraries(audiobatd PRIVATE
-    audiobat_common
+target_link_libraries(ramkolfxd PRIVATE
+    ramkolfx_common
     PkgConfig::PIPEWIRE
     Threads::Threads
     mysofa-static

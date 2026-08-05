@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -14,7 +14,7 @@
 
 struct MYSOFA_EASY;
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Thin wrapper around libmysofa's "easy" API. Not realtime-safe: Open()
@@ -44,7 +44,7 @@ public:
     }
 
     // Looks up (nearest-neighbor + interpolated) the HRIR pair for a
-    // direction, matching AudioBat's azimuth convention: 0 = front,
+    // direction, matching RamkolFX's azimuth convention: 0 = front,
     // positive = left. ElevationDegrees: 0 = horizontal, positive = up.
     // Returns an empty Filter if the loader isn't open.
     HrtfFilter GetFilter(float AzimuthDegrees, float ElevationDegrees) const;
@@ -55,4 +55,4 @@ private:
     float SampleRate = 0.0f;
 };
 
-} // namespace audiobat
+} // namespace ramkolfx

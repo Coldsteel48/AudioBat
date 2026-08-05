@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Runs the AudioBat daemon and GUI together.
+# Runs the RamkolFX daemon and GUI together.
 #
-# Starts audiobatd in the background, waits for its control socket to come
-# up, launches audiobat-gui in the foreground, then stops the daemon when
+# Starts ramkolfxd in the background, waits for its control socket to come
+# up, launches ramkolfx-gui in the foreground, then stops the daemon when
 # the GUI exits (or on Ctrl+C).
 #
 # Usage:
@@ -14,10 +14,10 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 BUILD_DIR="build"
-DAEMON_BIN="$BUILD_DIR/daemon/audiobatd"
-GUI_BIN="$BUILD_DIR/gui/audiobat-gui"
+DAEMON_BIN="$BUILD_DIR/daemon/ramkolfxd"
+GUI_BIN="$BUILD_DIR/gui/ramkolfx-gui"
 
-SOCK_PATH="${XDG_RUNTIME_DIR:-/tmp/audiobat-$(id -u)}/audiobat/control.sock"
+SOCK_PATH="${XDG_RUNTIME_DIR:-/tmp/ramkolfx-$(id -u)}/ramkolfx/control.sock"
 
 run_daemon_only() {
     exec "$DAEMON_BIN"

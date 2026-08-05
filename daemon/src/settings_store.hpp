@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -12,9 +12,9 @@
 #include <optional>
 #include <string>
 
-#include "audiobat/protocol.hpp"
+#include "ramkolfx/protocol.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Snapshot of daemon state worth remembering across restarts: spatial
@@ -40,7 +40,7 @@ struct PersistedSettings
 };
 
 // Loads/saves PersistedSettings as a small text file under
-// $XDG_CONFIG_HOME/audiobat (falling back to ~/.config/audiobat), so user
+// $XDG_CONFIG_HOME/ramkolfx (falling back to ~/.config/ramkolfx), so user
 // choices made through the control protocol survive a daemon restart.
 // Not realtime-safe - only ever called from AudioEngine::Run() (startup
 // load) and HandleControlCommand() (save after a mutating command, on a
@@ -67,4 +67,4 @@ private:
     std::string SettingsPath;
 };
 
-} // namespace audiobat
+} // namespace ramkolfx

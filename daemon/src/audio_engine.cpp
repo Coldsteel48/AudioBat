@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -34,7 +34,7 @@
 #include "single_instance_lock.hpp"
 #include "virtual_sink.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 namespace
@@ -96,7 +96,7 @@ std::string AudioEngine::ResolveInitialOutputDevice(const std::optional<Persiste
             return LoadedSettings->OutputDeviceName;
         }
         fprintf(stderr,
-                "[audiobatd] saved output device '%s' not found, falling back to auto-selection\n",
+                "[ramkolfxd] saved output device '%s' not found, falling back to auto-selection\n",
                 LoadedSettings->OutputDeviceName.c_str());
     }
 
@@ -105,13 +105,13 @@ std::string AudioEngine::ResolveInitialOutputDevice(const std::optional<Persiste
         return *Picked;
     }
 
-    fprintf(stderr, "[audiobatd] no output devices found, falling back to '%s'\n", TestOutputNodeName);
+    fprintf(stderr, "[ramkolfxd] no output devices found, falling back to '%s'\n", TestOutputNodeName);
     return TestOutputNodeName;
 }
 
 std::string AudioEngine::ResolveHrtfSofaPath()
 {
-    if (const char* Override = std::getenv("AUDIOBAT_HRTF_SOFA"))
+    if (const char* Override = std::getenv("RAMKOLFX_HRTF_SOFA"))
     {
         return Override;
     }
@@ -131,7 +131,7 @@ std::vector<HrtfCatalogEntry> AudioEngine::BuildHrtfCatalog()
         }
         else
         {
-            fprintf(stderr, "[audiobatd] HRTF catalog entry '%s' skipped, file not found: %s\n",
+            fprintf(stderr, "[ramkolfxd] HRTF catalog entry '%s' skipped, file not found: %s\n",
                     Entry.DisplayName.c_str(), Entry.Path.c_str());
         }
     }
@@ -141,7 +141,7 @@ std::vector<HrtfCatalogEntry> AudioEngine::BuildHrtfCatalog()
 std::string AudioEngine::ResolveUserHrtfDirectory()
 {
     std::string Directory;
-    if (const char* Override = std::getenv("AUDIOBAT_HRTF_DIR"); Override && *Override)
+    if (const char* Override = std::getenv("RAMKOLFX_HRTF_DIR"); Override && *Override)
     {
         Directory = Override;
     }
@@ -160,7 +160,7 @@ std::string AudioEngine::ResolveUserHrtfDirectory()
         {
             ConfigDir = "/tmp"; // last resort; matches SettingsStore's own /tmp fallback
         }
-        Directory = ConfigDir + "/audiobat/hrtf";
+        Directory = ConfigDir + "/ramkolfx/hrtf";
     }
 
     std::error_code Ignored;
@@ -211,7 +211,7 @@ void AudioEngine::RebuildHrtfCatalog()
     if (NewCatalog.size() > MaxCatalogEntries)
     {
         fprintf(stderr,
-                "[audiobatd] HRTF catalog has %zu entries after scanning %s, truncating to %zu "
+                "[ramkolfxd] HRTF catalog has %zu entries after scanning %s, truncating to %zu "
                 "(the wire protocol's HrtfIndex is a single byte)\n",
                 NewCatalog.size(), UserHrtfDirectory.c_str(), MaxCatalogEntries);
         NewCatalog.resize(MaxCatalogEntries);
@@ -257,7 +257,7 @@ int AudioEngine::Run()
     InstanceLock = std::make_unique<SingleInstanceLock>(LockPath);
     if (!InstanceLock->TryAcquire())
     {
-        fprintf(stderr, "[audiobatd] another instance is already running (pid %s), exiting\n",
+        fprintf(stderr, "[ramkolfxd] another instance is already running (pid %s), exiting\n",
                 InstanceLock->HolderPid().empty() ? "unknown" : InstanceLock->HolderPid().c_str());
         return 1;
     }
@@ -268,7 +268,7 @@ int AudioEngine::Run()
     MainLoop = pw_main_loop_new(nullptr);
     if (!MainLoop)
     {
-        fprintf(stderr, "[audiobatd] failed to create PipeWire main loop\n");
+        fprintf(stderr, "[ramkolfxd] failed to create PipeWire main loop\n");
         Teardown();
         return 1;
     }
@@ -281,7 +281,7 @@ int AudioEngine::Run()
     // default disposition, bypassing this handler entirely.
     auto OnSignal = [](void* Data, int SignalNumber)
     {
-        fprintf(stderr, "[audiobatd] received signal %d, shutting down\n", SignalNumber);
+        fprintf(stderr, "[ramkolfxd] received signal %d, shutting down\n", SignalNumber);
         static_cast<AudioEngine*>(Data)->Stop();
     };
     pw_loop_add_signal(Loop, SIGINT, OnSignal, this);
@@ -309,7 +309,7 @@ int AudioEngine::Run()
             SharedLayout.SetSpeakerDistance(Channel, LoadedSettings->SpeakerDistanceMeters[i]);
             SharedLayout.SetSpeakerMuted(Channel, LoadedSettings->SpeakerMuted[i]);
         }
-        fprintf(stderr, "[audiobatd] restored settings from previous session\n");
+        fprintf(stderr, "[ramkolfxd] restored settings from previous session\n");
     }
 
     // Directory the daemon watches for user-supplied SOFA files - unlike
@@ -323,13 +323,13 @@ int AudioEngine::Run()
     const int HrtfDirWatchFd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
     if (HrtfDirWatchFd < 0)
     {
-        fprintf(stderr, "[audiobatd] inotify_init1 failed: %s (user HRTF directory won't auto-refresh)\n",
+        fprintf(stderr, "[ramkolfxd] inotify_init1 failed: %s (user HRTF directory won't auto-refresh)\n",
                 strerror(errno));
     }
     else if (inotify_add_watch(HrtfDirWatchFd, UserHrtfDirectory.c_str(),
                                 IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE) < 0)
     {
-        fprintf(stderr, "[audiobatd] failed to watch HRTF directory %s: %s (won't auto-refresh)\n",
+        fprintf(stderr, "[ramkolfxd] failed to watch HRTF directory %s: %s (won't auto-refresh)\n",
                 UserHrtfDirectory.c_str(), strerror(errno));
         close(HrtfDirWatchFd);
     }
@@ -342,15 +342,15 @@ int AudioEngine::Run()
         pw_loop_add_io(Loop, HrtfDirWatchFd, SPA_IO_IN, true, &AudioEngine::OnHrtfDirectoryChanged, this);
     }
 
-    // ResolveHrtfSofaPath() (AUDIOBAT_HRTF_SOFA or the bundled default)
+    // ResolveHrtfSofaPath() (RAMKOLFX_HRTF_SOFA or the bundled default)
     // picks the initial HRTF source unless a persisted choice overrides it
-    // below. AUDIOBAT_HRTF_SOFA is a lower-level dev/testing override (see
+    // below. RAMKOLFX_HRTF_SOFA is a lower-level dev/testing override (see
     // its doc comment) so it always wins over a persisted choice when set.
     std::string InitialSofaPath = ResolveHrtfSofaPath();
     HrtfSourceKind InitialHrtfKind = HrtfSourceKind::SofaFile;
 
     bool bAppliedPersistedHrtfChoice = false;
-    if (!std::getenv("AUDIOBAT_HRTF_SOFA") && LoadedSettings && !LoadedSettings->ActiveHrtfDisplayName.empty())
+    if (!std::getenv("RAMKOLFX_HRTF_SOFA") && LoadedSettings && !LoadedSettings->ActiveHrtfDisplayName.empty())
     {
         for (size_t i = 0; i < RuntimeHrtfCatalog.size(); ++i)
         {
@@ -447,7 +447,7 @@ int AudioEngine::Run()
         return 1;
     }
 
-    fprintf(stderr, "[audiobatd] running (pass-through mode). Ctrl+C to stop.\n");
+    fprintf(stderr, "[ramkolfxd] running (pass-through mode). Ctrl+C to stop.\n");
     pw_main_loop_run(MainLoop);
 
     Teardown();
@@ -646,7 +646,7 @@ std::vector<uint8> AudioEngine::HandleControlCommand(const Command& InCommand)
     {
         Mode.store(InCommand.ModeValue, std::memory_order_relaxed);
         bPersistedStateChanged = true;
-        fprintf(stderr, "[audiobatd] spatial mode set to %d\n", static_cast<int>(InCommand.ModeValue));
+        fprintf(stderr, "[ramkolfxd] spatial mode set to %d\n", static_cast<int>(InCommand.ModeValue));
     }
     else if (InCommand.CommandOpcode == Opcode::SetSpeakerAzimuth)
     {
@@ -690,7 +690,7 @@ std::vector<uint8> AudioEngine::HandleControlCommand(const Command& InCommand)
         bPersistedStateChanged = true;
         if (!Output->SetTargetNode(InCommand.OutputDeviceName))
         {
-            fprintf(stderr, "[audiobatd] failed to switch output device to %s\n",
+            fprintf(stderr, "[ramkolfxd] failed to switch output device to %s\n",
                     InCommand.OutputDeviceName.c_str());
         }
     }
@@ -730,11 +730,11 @@ std::vector<uint8> AudioEngine::HandleControlCommand(const Command& InCommand)
             AdvancedStage->SwitchTo(SelectedEntry.Kind, SelectedEntry.Path);
             ActiveHrtfIndex.store(InCommand.HrtfIndex, std::memory_order_relaxed);
             bPersistedStateChanged = true;
-            fprintf(stderr, "[audiobatd] HRTF source switched to '%s'\n", SelectedEntry.DisplayName.c_str());
+            fprintf(stderr, "[ramkolfxd] HRTF source switched to '%s'\n", SelectedEntry.DisplayName.c_str());
         }
         else
         {
-            fprintf(stderr, "[audiobatd] SetHrtfFile: index %u out of range (catalog has %zu entries)\n",
+            fprintf(stderr, "[ramkolfxd] SetHrtfFile: index %u out of range (catalog has %zu entries)\n",
                     InCommand.HrtfIndex, CatalogSize);
         }
     }
@@ -782,4 +782,4 @@ void AudioEngine::PersistCurrentSettings(const Status& CurrentStatus)
     Settings.Save(ToSave);
 }
 
-} // namespace audiobat
+} // namespace ramkolfx

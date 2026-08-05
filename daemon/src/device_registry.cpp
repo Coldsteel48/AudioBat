@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -19,7 +19,7 @@
 
 #include "virtual_sink.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 namespace
@@ -104,21 +104,21 @@ bool DeviceRegistry::Start()
     Context = pw_context_new(Loop, nullptr, 0);
     if (!Context)
     {
-        fprintf(stderr, "[audiobatd] failed to create device registry context\n");
+        fprintf(stderr, "[ramkolfxd] failed to create device registry context\n");
         return false;
     }
 
     Core = pw_context_connect(Context, nullptr, 0);
     if (!Core)
     {
-        fprintf(stderr, "[audiobatd] failed to connect device registry core\n");
+        fprintf(stderr, "[ramkolfxd] failed to connect device registry core\n");
         return false;
     }
 
     Registry = pw_core_get_registry(Core, PW_VERSION_REGISTRY, 0);
     if (!Registry)
     {
-        fprintf(stderr, "[audiobatd] failed to get PipeWire registry\n");
+        fprintf(stderr, "[ramkolfxd] failed to get PipeWire registry\n");
         return false;
     }
 
@@ -142,7 +142,7 @@ bool DeviceRegistry::WaitForInitialSync(int TimeoutMs)
     spa_hook_remove(&CoreListener);
     if (!State.bDone)
     {
-        fprintf(stderr, "[audiobatd] device registry initial sync timed out after %dms\n", TimeoutMs);
+        fprintf(stderr, "[ramkolfxd] device registry initial sync timed out after %dms\n", TimeoutMs);
     }
     return State.bDone;
 }
@@ -264,4 +264,4 @@ std::optional<std::string> DeviceRegistry::PickAnyDevice() const
     return Picked ? std::make_optional(Picked->Name) : std::nullopt;
 }
 
-} // namespace audiobat
+} // namespace ramkolfx

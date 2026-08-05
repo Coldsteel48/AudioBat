@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -12,9 +12,9 @@
 #include <numbers>
 #include <vector>
 
-#include "audiobat/types.hpp"
+#include "ramkolfx/types.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Physical constants shared by every rigid-sphere head model in this
@@ -43,7 +43,7 @@ inline float NormalizeAzimuthDegrees(float AzimuthDegrees)
 
 // Lateral angle from the interaural axis, in degrees: 0 at dead
 // front/behind (equidistant to both ears), 90 at either side (maximum
-// path-length difference between ears). Folds AudioBat's azimuth
+// path-length difference between ears). Folds RamkolFX's azimuth
 // convention (0 = front, positive = left, wrapping at +-180) onto the
 // classic Woodworth-formula convention (0 = front, 90 = side) that both
 // rigid-sphere models here are built on. Takes an already-normalized
@@ -72,4 +72,4 @@ inline std::vector<float> BuildUnityGainLowpassIR(float CutoffHz, float SampleRa
     return Taps;
 }
 
-} // namespace audiobat
+} // namespace ramkolfx

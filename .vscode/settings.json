@@ -3,7 +3,7 @@
     "cmake.buildDirectory": "${workspaceFolder}/build",
     "cmake.generator": "Ninja",
     "cmake.configureSettings": {
-        "AUDIOBAT_BUILD_GUI": "ON"
+        "RAMKOLFX_BUILD_GUI": "ON"
     },
     "cmake.buildBeforeRun": true,
     "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json"

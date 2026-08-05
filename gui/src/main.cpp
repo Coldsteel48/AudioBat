@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -30,11 +30,11 @@ constexpr float BaseFontSizePixels = 13.0f; // ImGui's own default bake size
 // physical size on high-DPI displays instead of staying pinned to a tiny
 // fixed pixel size. SDL's per-display DPI query is authoritative where
 // it works, but Linux/X11 in particular is notorious for not reporting
-// the desktop's actual scale factor through it - AUDIOBAT_GUI_SCALE lets
+// the desktop's actual scale factor through it - RAMKOLFX_GUI_SCALE lets
 // a user override the guess on setups where auto-detection gets it wrong.
 float ResolveDpiScale()
 {
-    if (const char* Override = std::getenv("AUDIOBAT_GUI_SCALE"))
+    if (const char* Override = std::getenv("RAMKOLFX_GUI_SCALE"))
     {
         const float Value = static_cast<float>(std::atof(Override));
         if (Value >= 0.5f && Value <= 4.0f)
@@ -66,21 +66,21 @@ int main()
 {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0)
     {
-        fprintf(stderr, "[audiobat-gui] SDL_Init failed: %s\n", SDL_GetError());
+        fprintf(stderr, "[ramkolfx-gui] SDL_Init failed: %s\n", SDL_GetError());
         return 1;
     }
 
     const float DpiScale = ResolveDpiScale();
 
-    auto Renderer = audiobat::gui::CreateOpenGL3Renderer();
+    auto Renderer = ramkolfx::gui::CreateOpenGL3Renderer();
 
     SDL_Window* Window = SDL_CreateWindow(
-        "AudioBat Control", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        "RamkolFX Control", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         static_cast<int>(BaseWindowWidth * DpiScale), static_cast<int>(BaseWindowHeight * DpiScale),
         Renderer->GetSDLWindowFlags() | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     if (!Window)
     {
-        fprintf(stderr, "[audiobat-gui] SDL_CreateWindow failed: %s\n", SDL_GetError());
+        fprintf(stderr, "[ramkolfx-gui] SDL_CreateWindow failed: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
     }
@@ -102,7 +102,7 @@ int main()
         return 1;
     }
 
-    audiobat::gui::App App(DpiScale);
+    ramkolfx::gui::App App(DpiScale);
 
     bool bQuit = false;
     Uint64 LastFrameTicks = SDL_GetPerformanceCounter();

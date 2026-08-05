@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -14,9 +14,9 @@
 #include <string>
 #include <vector>
 
-#include "audiobat/types.hpp"
+#include "ramkolfx/types.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Minimal binary control protocol spoken over the daemon's Unix domain
@@ -201,10 +201,10 @@ std::vector<uint8> EncodeSetHrtfFileRequest(uint8 HrtfIndex);
 std::vector<uint8> EncodeSetSpeakerDistanceRequest(uint8 SpeakerIndex, float DistanceMeters);
 std::vector<uint8> EncodeSetNearFieldEnabledRequest(bool bEnabled);
 
-// Resolves the default control socket path: $XDG_RUNTIME_DIR/audiobat/control.sock,
-// falling back to /tmp/audiobat-<uid>/control.sock if XDG_RUNTIME_DIR isn't set.
+// Resolves the default control socket path: $XDG_RUNTIME_DIR/ramkolfx/control.sock,
+// falling back to /tmp/ramkolfx-<uid>/control.sock if XDG_RUNTIME_DIR isn't set.
 // Shared between the daemon (binds it) and control clients like the GUI
 // (connect to it), so it lives here rather than in daemon-only code.
 std::string DefaultControlSocketPath();
 
-} // namespace audiobat
+} // namespace ramkolfx

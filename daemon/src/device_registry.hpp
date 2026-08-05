@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -16,8 +16,8 @@
 
 #include <spa/utils/hook.h>
 
-#include "audiobat/protocol.hpp"
-#include "audiobat/types.hpp"
+#include "ramkolfx/protocol.hpp"
+#include "ramkolfx/types.hpp"
 
 struct pw_loop;
 struct pw_context;
@@ -26,7 +26,7 @@ struct pw_registry;
 struct pw_metadata;
 struct spa_dict;
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Maintains a live list of real hardware playback sinks (PipeWire nodes
@@ -108,4 +108,4 @@ private:
     std::unordered_map<uint32, AudioDeviceInfo> DevicesById;
 };
 
-} // namespace audiobat
+} // namespace ramkolfx

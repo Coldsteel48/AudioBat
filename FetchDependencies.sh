@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# AudioBat
+# RamkolFX
 # Copyright (C) 2026 Roman Levin (Coldsteel48)
 #
-# This file is part of AudioBat, dual-licensed under the GNU General
+# This file is part of RamkolFX, dual-licensed under the GNU General
 # Public License v3.0 (see LICENSE) or a separate commercial license
 # (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 # terms of the Contributor License Agreement (see CLA.md).
 #
-# Installs the OS packages needed to build and run AudioBat (see the
+# Installs the OS packages needed to build and run RamkolFX (see the
 # "Dependencies" section of README.md). Detects the distro via
 # /etc/os-release and dispatches to its native package manager.
 #
@@ -90,4 +90,4 @@ case "$ID $ID_LIKE" in
 esac
 
 echo
-echo "Dependencies installed. Build with ./build.sh (or omit -DAUDIOBAT_BUILD_GUI=ON for a daemon-only build)."
+echo "Dependencies installed. Build with ./build.sh (or omit -DRAMKOLFX_BUILD_GUI=ON for a daemon-only build)."

@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -11,7 +11,7 @@
 #include "imgui.h"
 #include "position_dial.hpp"
 
-namespace audiobat::gui
+namespace ramkolfx::gui
 {
 
 namespace
@@ -103,11 +103,11 @@ void App::Tick(float DeltaTimeSeconds)
 
 void App::DrawUI()
 {
-    ImGui::Begin("AudioBat Control", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Begin("RamkolFX Control", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
     if (bConnected)
     {
-        ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "Connected to audiobatd");
+        ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "Connected to ramkolfxd");
     }
     else
     {
@@ -430,4 +430,4 @@ void App::DrawUI()
     ImGui::End();
 }
 
-} // namespace audiobat::gui
+} // namespace ramkolfx::gui

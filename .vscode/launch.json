@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug audiobatd (daemon)",
+            "name": "Debug ramkolfxd (daemon)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/daemon/audiobatd",
+            "program": "${workspaceFolder}/build/daemon/ramkolfxd",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -23,10 +23,10 @@
             "preLaunchTask": "CMake: build"
         },
         {
-            "name": "Debug audiobat-gui",
+            "name": "Debug ramkolfx-gui",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/gui/audiobat-gui",
+            "program": "${workspaceFolder}/build/gui/ramkolfx-gui",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

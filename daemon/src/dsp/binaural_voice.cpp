@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -14,7 +14,7 @@
 #include "near_field_filter.hpp"
 #include "synthetic_hrtf.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 namespace
@@ -104,4 +104,4 @@ void BinauralVoice::Process(const float* MonoInput, float* StereoOutput, uint32 
         StereoOutput, Frames);
 }
 
-} // namespace audiobat
+} // namespace ramkolfx

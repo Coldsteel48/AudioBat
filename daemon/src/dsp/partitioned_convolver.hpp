@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -12,9 +12,9 @@
 
 #include <kiss_fftr.h>
 
-#include "audiobat/types.hpp"
+#include "ramkolfx/types.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Single-partition overlap-save FFT convolver (KissFFT-backed). Used by
@@ -81,4 +81,4 @@ private:
     uint32 PendingOutputCount = 0;
 };
 
-} // namespace audiobat
+} // namespace ramkolfx

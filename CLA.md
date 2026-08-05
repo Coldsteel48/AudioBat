@@ -1,6 +1,6 @@
-# AudioBat Contributor License Agreement (CLA)
+# RamkolFX Contributor License Agreement (CLA)
 
-Thank you for your interest in contributing to AudioBat ("the Project"),
+Thank you for your interest in contributing to RamkolFX ("the Project"),
 maintained by Roman Levin, also known as Coldsteel48 ("the Maintainer").
 
 This Contributor License Agreement ("Agreement") clarifies the terms under

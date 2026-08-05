@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -14,14 +14,14 @@
 #include <thread>
 #include <vector>
 
-#include "audiobat/protocol.hpp"
-#include "audiobat/types.hpp"
+#include "ramkolfx/protocol.hpp"
+#include "ramkolfx/types.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Unix domain socket server for the daemon's control protocol (see
-// audiobat/protocol.hpp for the wire format). Accepts multiple concurrent
+// ramkolfx/protocol.hpp for the wire format). Accepts multiple concurrent
 // clients (GUI, CLI tools), each on its own thread.
 class ControlServer
 {
@@ -58,4 +58,4 @@ private:
     CommandHandler Handler;
 };
 
-} // namespace audiobat
+} // namespace ramkolfx

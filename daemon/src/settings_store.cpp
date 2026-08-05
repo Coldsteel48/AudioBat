@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -16,13 +16,13 @@
 
 #include <sys/stat.h>
 
-namespace audiobat
+namespace ramkolfx
 {
 
 namespace
 {
 
-// $XDG_CONFIG_HOME/audiobat, falling back to ~/.config/audiobat per the
+// $XDG_CONFIG_HOME/ramkolfx, falling back to ~/.config/ramkolfx per the
 // XDG base directory spec - unlike the control socket (XDG_RUNTIME_DIR,
 // typically tmpfs), settings need to survive a reboot.
 std::string DefaultSettingsPath()
@@ -40,7 +40,7 @@ std::string DefaultSettingsPath()
     {
         ConfigDir = "/tmp"; // last resort; matches DefaultControlSocketPath's own /tmp fallback
     }
-    ConfigDir += "/audiobat";
+    ConfigDir += "/ramkolfx";
     mkdir(ConfigDir.c_str(), 0700);
     return ConfigDir + "/settings.conf";
 }
@@ -157,7 +157,7 @@ void SettingsStore::Save(const PersistedSettings& InSettings) const
     std::ofstream File(TempPath, std::ios::trunc);
     if (!File.is_open())
     {
-        fprintf(stderr, "[audiobatd] failed to write settings to %s\n", TempPath.c_str());
+        fprintf(stderr, "[ramkolfxd] failed to write settings to %s\n", TempPath.c_str());
         return;
     }
     File << Out.str();
@@ -165,8 +165,8 @@ void SettingsStore::Save(const PersistedSettings& InSettings) const
 
     if (std::rename(TempPath.c_str(), SettingsPath.c_str()) != 0)
     {
-        fprintf(stderr, "[audiobatd] failed to save settings to %s\n", SettingsPath.c_str());
+        fprintf(stderr, "[ramkolfxd] failed to save settings to %s\n", SettingsPath.c_str());
     }
 }
 
-} // namespace audiobat
+} // namespace ramkolfx

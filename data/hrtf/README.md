@@ -18,7 +18,7 @@ commercial or otherwise. This `.sofa` file is a SOFA-format conversion of
 that same public-domain dataset, redistributed by the SOFA conventions
 project.
 
-This is the default HRTF source when the `AUDIOBAT_HRTF_SOFA` environment
+This is the default HRTF source when the `RAMKOLFX_HRTF_SOFA` environment
 variable isn't set and no other catalog entry has been selected via the
 control protocol.
 
@@ -30,12 +30,12 @@ from the SADIE II HRTF database, University of York:
 
 Source: Zenodo record <https://zenodo.org/records/12092466>
 (`<ID>_HRIR_SOFA.zip`, `<ID>_48K_24bit_256tap_FIR_SOFA.sofa` member
-extracted — matches AudioBat's fixed 48kHz pipeline rate).
+extracted — matches RamkolFX's fixed 48kHz pipeline rate).
 
 **License: Apache License, Version 2.0** (full text bundled at
 `sadie/LICENSE.txt`, fetched from the same Zenodo record). Redistribution
 requires preserving copyright/license notices, which `LICENSE.txt`
-satisfies; if you redistribute AudioBat itself, keep it alongside these
+satisfies; if you redistribute RamkolFX itself, keep it alongside these
 files.
 
 **Citation** (required whenever this data is used, per the database's own
@@ -59,22 +59,22 @@ constants. No measured data, so no data license at all — purely math.
 Coarser than any measured dataset above (no pinna spectral detail, so
 weaker front/back cues), but always available regardless of what's on
 disk, and a genuinely license-free option for anyone redistributing
-AudioBat who wants to avoid bundling third-party data entirely.
+RamkolFX who wants to avoid bundling third-party data entirely.
 
 ## Bringing your own SOFA files
 
 Beyond the vetted, redistributable datasets above, the daemon also watches
 a user-writable directory and lists whatever `.sofa` files it finds there
 in the GUI's HRTF dropdown, prefixed `(user) ` — no rebuild or restart
-needed. **AudioBat doesn't bundle, vet, or check the license of anything
+needed. **RamkolFX doesn't bundle, vet, or check the license of anything
 placed here — that's entirely on you.** This is the place to put a SOFA
 dataset with terms that don't allow redistribution (e.g. CIPIC, ARI,
 Listen, or any "research only" dataset), or one of your own individual
 HRIR measurements.
 
-By default this is `$XDG_CONFIG_HOME/audiobat/hrtf`, falling back to
-`~/.config/audiobat/hrtf` (created automatically on first run). Set
-`AUDIOBAT_HRTF_DIR` to point the daemon at a different directory instead.
+By default this is `$XDG_CONFIG_HOME/ramkolfx/hrtf`, falling back to
+`~/.config/ramkolfx/hrtf` (created automatically on first run). Set
+`RAMKOLFX_HRTF_DIR` to point the daemon at a different directory instead.
 Files are matched purely by `.sofa` extension (case-insensitive) and
 aren't parsed until selected — a corrupt or non-SOFA file will show up in
 the list but fail gracefully (falling back to silence for that source)
@@ -82,7 +82,7 @@ rather than crashing the daemon when selected.
 
 ## Overriding at runtime
 
-`AUDIOBAT_HRTF_SOFA` (environment variable) still works as a lower-level
+`RAMKOLFX_HRTF_SOFA` (environment variable) still works as a lower-level
 override, pointing `BinauralStage` at any arbitrary SOFA file path outside
 the catalog entirely (including outside the user directory above) —
 useful for trying a single dataset without adding it to the catalog. The

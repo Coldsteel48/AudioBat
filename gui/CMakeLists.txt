@@ -1,18 +1,18 @@
-# AudioBat
+# RamkolFX
 # Copyright (C) 2026 Roman Levin (Coldsteel48)
 #
-# This file is part of AudioBat, dual-licensed under the GNU General
+# This file is part of RamkolFX, dual-licensed under the GNU General
 # Public License v3.0 (see LICENSE) or a separate commercial license
 # (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 # terms of the Contributor License Agreement (see CLA.md).
 
-# Dear ImGui + SDL2/OpenGL3 control app. Talks to audiobatd purely over
-# the Unix control socket (see common/include/audiobat/protocol.hpp) -
+# Dear ImGui + SDL2/OpenGL3 control app. Talks to ramkolfxd purely over
+# the Unix control socket (see common/include/ramkolfx/protocol.hpp) -
 # deliberately no PipeWire dependency here.
 #
 # Dear ImGui (MIT-licensed) is vendored via FetchContent rather than a
 # system package: it avoids Qt/GTK's LGPL relinking obligations mattering
-# for AudioBat's commercial license track, and sidesteps cross-distro
+# for RamkolFX's commercial license track, and sidesteps cross-distro
 # Qt5/Qt6 or GTK version skew since ImGui is meant to be compiled straight
 # into the app rather than linked as a versioned shared library.
 
@@ -42,7 +42,7 @@ target_include_directories(imgui PUBLIC
 )
 target_link_libraries(imgui PUBLIC PkgConfig::SDL2 OpenGL::GL)
 
-add_executable(audiobat-gui
+add_executable(ramkolfx-gui
     src/main.cpp
     src/app.cpp
     src/control_client.cpp
@@ -50,8 +50,8 @@ add_executable(audiobat-gui
     src/renderer_opengl3.cpp
 )
 
-target_link_libraries(audiobat-gui PRIVATE
-    audiobat_common
+target_link_libraries(ramkolfx-gui PRIVATE
+    ramkolfx_common
     imgui
     PkgConfig::SDL2
     OpenGL::GL

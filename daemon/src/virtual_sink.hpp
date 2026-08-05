@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -10,16 +10,16 @@
 
 #include <functional>
 
-#include "audiobat/types.hpp"
+#include "ramkolfx/types.hpp"
 
 struct pw_stream;
 struct pw_loop;
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Wraps a PipeWire stream that presents itself to the rest of the system as
-// an audio Sink ("AudioBat Virtual Sink"). Client applications (games,
+// an audio Sink ("RamkolFX Virtual Sink"). Client applications (games,
 // media players rendering 7.1 through OpenAL/PipeWire) send their output
 // here instead of to real hardware; we consume it via the audio callback.
 //
@@ -35,7 +35,7 @@ public:
     // DeviceRegistry filters it out of the selectable hardware output list
     // by this same name (selecting ourselves as the hardware target would
     // loop the signal back into the capture side).
-    static constexpr const char* NodeName = "audiobat_virtual_sink";
+    static constexpr const char* NodeName = "ramkolfx_virtual_sink";
 
     // Called on the PipeWire realtime thread whenever a block of
     // interleaved float audio (Channels per frame) arrives.
@@ -62,4 +62,4 @@ private:
     AudioCallback Callback;
 };
 
-} // namespace audiobat
+} // namespace ramkolfx

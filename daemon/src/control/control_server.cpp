@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -17,7 +17,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-namespace audiobat
+namespace ramkolfx
 {
 
 ControlServer::ControlServer(std::string InSocketPath) : SocketPath(std::move(InSocketPath))
@@ -39,7 +39,7 @@ bool ControlServer::Start()
     ListenFd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (ListenFd < 0)
     {
-        fprintf(stderr, "[audiobatd] failed to create control socket: %s\n", strerror(errno));
+        fprintf(stderr, "[ramkolfxd] failed to create control socket: %s\n", strerror(errno));
         return false;
     }
 
@@ -47,7 +47,7 @@ bool ControlServer::Start()
     Addr.sun_family = AF_UNIX;
     if (SocketPath.size() >= sizeof(Addr.sun_path))
     {
-        fprintf(stderr, "[audiobatd] control socket path too long: %s\n", SocketPath.c_str());
+        fprintf(stderr, "[ramkolfxd] control socket path too long: %s\n", SocketPath.c_str());
         close(ListenFd);
         ListenFd = -1;
         return false;
@@ -58,7 +58,7 @@ bool ControlServer::Start()
 
     if (bind(ListenFd, reinterpret_cast<sockaddr*>(&Addr), sizeof(Addr)) < 0)
     {
-        fprintf(stderr, "[audiobatd] failed to bind control socket %s: %s\n", SocketPath.c_str(),
+        fprintf(stderr, "[ramkolfxd] failed to bind control socket %s: %s\n", SocketPath.c_str(),
                 strerror(errno));
         close(ListenFd);
         ListenFd = -1;
@@ -67,7 +67,7 @@ bool ControlServer::Start()
 
     if (listen(ListenFd, 4) < 0)
     {
-        fprintf(stderr, "[audiobatd] failed to listen on control socket: %s\n", strerror(errno));
+        fprintf(stderr, "[ramkolfxd] failed to listen on control socket: %s\n", strerror(errno));
         close(ListenFd);
         ListenFd = -1;
         return false;
@@ -76,7 +76,7 @@ bool ControlServer::Start()
     bRunning.store(true, std::memory_order_relaxed);
     AcceptThread = std::thread(&ControlServer::AcceptLoop, this);
 
-    fprintf(stderr, "[audiobatd] control socket listening at %s\n", SocketPath.c_str());
+    fprintf(stderr, "[ramkolfxd] control socket listening at %s\n", SocketPath.c_str());
     return true;
 }
 
@@ -164,4 +164,4 @@ void ControlServer::HandleClient(int ClientFd)
     close(ClientFd);
 }
 
-} // namespace audiobat
+} // namespace ramkolfx

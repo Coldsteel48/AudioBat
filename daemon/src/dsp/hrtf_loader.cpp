@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -12,7 +12,7 @@
 
 #include <mysofa.h>
 
-namespace audiobat
+namespace ramkolfx
 {
 
 HrtfLoader::~HrtfLoader()
@@ -35,7 +35,7 @@ bool HrtfLoader::Open(const std::string& SofaPath, float TargetSampleRate)
     Easy = mysofa_open(SofaPath.c_str(), TargetSampleRate, &FilterTapCount, &Err);
     if (!Easy || Err != MYSOFA_OK)
     {
-        fprintf(stderr, "[audiobatd] failed to load HRTF SOFA file '%s' (mysofa error %d)\n",
+        fprintf(stderr, "[ramkolfxd] failed to load HRTF SOFA file '%s' (mysofa error %d)\n",
                 SofaPath.c_str(), Err);
         Easy = nullptr;
         FilterTapCount = 0;
@@ -53,7 +53,7 @@ HrtfFilter HrtfLoader::GetFilter(float AzimuthDegrees, float ElevationDegrees) c
         return Out;
     }
 
-    // mysofa_s2c uses the same azimuth convention AudioBat does: 0 =
+    // mysofa_s2c uses the same azimuth convention RamkolFX does: 0 =
     // front, positive = left (SOFA's +X = front, +Y = left coordinate
     // system). Radius is arbitrary for a far-field HRTF lookup.
     float Coordinate[3] = {AzimuthDegrees, ElevationDegrees, 1.0f};
@@ -76,4 +76,4 @@ HrtfFilter HrtfLoader::GetFilter(float AzimuthDegrees, float ElevationDegrees) c
     return Out;
 }
 
-} // namespace audiobat
+} // namespace ramkolfx

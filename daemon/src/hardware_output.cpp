@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -16,7 +16,7 @@
 #include <spa/param/audio/format-utils.h>
 #include <spa/utils/result.h>
 
-namespace audiobat
+namespace ramkolfx
 {
 
 namespace
@@ -32,7 +32,7 @@ void OnStateChanged(void* UserData, enum pw_stream_state OldState, enum pw_strea
 {
     (void)UserData;
     (void)OldState;
-    fprintf(stderr, "[audiobatd] hardware output state: %s%s%s\n", pw_stream_state_as_string(NewState),
+    fprintf(stderr, "[ramkolfxd] hardware output state: %s%s%s\n", pw_stream_state_as_string(NewState),
             ErrorMessage ? " error: " : "", ErrorMessage ? ErrorMessage : "");
 }
 
@@ -69,11 +69,11 @@ bool HardwareOutput::Start()
 {
     pw_properties* Props =
         pw_properties_new(PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY, "Playback",
-                           PW_KEY_MEDIA_ROLE, "Music", PW_KEY_NODE_NAME, "audiobat_output",
-                           PW_KEY_NODE_DESCRIPTION, "AudioBat Spatialized Output", nullptr);
+                           PW_KEY_MEDIA_ROLE, "Music", PW_KEY_NODE_NAME, "ramkolfx_output",
+                           PW_KEY_NODE_DESCRIPTION, "RamkolFX Spatialized Output", nullptr);
 
     // Pin to a specific hardware node instead of "default sink": this is
-    // what makes it safe to later set the AudioBat virtual sink as the
+    // what makes it safe to later set the RamkolFX virtual sink as the
     // system default without the output stream looping back into it.
     //
     // target.object alone is only an initial-link hint - WirePlumber's
@@ -85,10 +85,10 @@ bool HardwareOutput::Start()
     pw_properties_set(Props, PW_KEY_TARGET_OBJECT, TargetNodeName.c_str());
     pw_properties_set(Props, PW_KEY_NODE_DONT_RECONNECT, "true");
 
-    Stream = pw_stream_new_simple(Loop, "AudioBat Output", Props, &StreamEvents, this);
+    Stream = pw_stream_new_simple(Loop, "RamkolFX Output", Props, &StreamEvents, this);
     if (!Stream)
     {
-        fprintf(stderr, "[audiobatd] failed to create hardware output stream\n");
+        fprintf(stderr, "[ramkolfxd] failed to create hardware output stream\n");
         return false;
     }
 
@@ -175,7 +175,7 @@ bool HardwareOutput::ConnectStream()
     int Result = pw_stream_connect(Stream, PW_DIRECTION_OUTPUT, PW_ID_ANY, Flags, Params, 1);
     if (Result < 0)
     {
-        fprintf(stderr, "[audiobatd] failed to connect hardware output stream: %s\n",
+        fprintf(stderr, "[ramkolfxd] failed to connect hardware output stream: %s\n",
                 spa_strerror(Result));
         return false;
     }
@@ -219,4 +219,4 @@ void HardwareOutput::HandleProcess()
     pw_stream_queue_buffer(Stream, PwBuffer);
 }
 
-} // namespace audiobat
+} // namespace ramkolfx

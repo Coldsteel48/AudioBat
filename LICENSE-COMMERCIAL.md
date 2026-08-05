@@ -1,12 +1,12 @@
-# AudioBat Commercial License
+# RamkolFX Commercial License
 
-AudioBat is dual-licensed:
+RamkolFX is dual-licensed:
 
 1. **GNU General Public License v3.0 (GPLv3)** — see [LICENSE](LICENSE). Free
    to use, modify, and distribute, provided derivative works are also
    released under GPLv3.
 2. **Commercial license** — for organizations or individuals who want to use
-   AudioBat code (in whole or in part) in a proprietary or closed-source
+   RamkolFX code (in whole or in part) in a proprietary or closed-source
    product without the copyleft obligations of GPLv3.
 
 ## Status

@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -12,13 +12,13 @@
 #include <memory>
 #include <string>
 
-#include "audiobat/types.hpp"
+#include "ramkolfx/types.hpp"
 #include "binaural_stage.hpp"
 #include "crossfading_slot.hpp"
 #include "dsp_stage.hpp"
 #include "speaker_layout.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Wraps two BinauralStages (via CrossfadingSlot) so switching the active
@@ -75,4 +75,4 @@ private:
     CrossfadingSlot<BinauralStage> Slot;
 };
 
-} // namespace audiobat
+} // namespace ramkolfx

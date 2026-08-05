@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -21,7 +21,7 @@
 // ImGui OpenGL/SDL2 backend headers - everything else only sees
 // renderer.hpp's plain IRenderer interface.
 
-namespace audiobat::gui
+namespace ramkolfx::gui
 {
 
 namespace
@@ -44,7 +44,7 @@ public:
         GLContext = SDL_GL_CreateContext(Window);
         if (!GLContext)
         {
-            fprintf(stderr, "[audiobat-gui] SDL_GL_CreateContext failed: %s\n", SDL_GetError());
+            fprintf(stderr, "[ramkolfx-gui] SDL_GL_CreateContext failed: %s\n", SDL_GetError());
             return false;
         }
         SDL_GL_MakeCurrent(Window, GLContext);
@@ -96,4 +96,4 @@ std::unique_ptr<IRenderer> CreateOpenGL3Renderer()
     return std::make_unique<OpenGL3Renderer>();
 }
 
-} // namespace audiobat::gui
+} // namespace ramkolfx::gui

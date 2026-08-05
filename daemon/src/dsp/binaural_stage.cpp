@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -18,7 +18,7 @@
 #include "hrtf_gain_normalization.hpp"
 #include "synthetic_hrtf.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 namespace
@@ -105,7 +105,7 @@ BinauralStage::BinauralStage(const SpeakerLayout& InLayout, HrtfSourceKind Kind,
             LeftConvolvers[k].Load(DelayedLeft.data(), static_cast<uint32>(DelayedLeft.size()));
             RightConvolvers[k].Load(DelayedRight.data(), static_cast<uint32>(DelayedRight.size()));
         }
-        fprintf(stderr, "[audiobatd] using synthetic spherical-head HRTF model @ %.0f Hz\n", SampleRate);
+        fprintf(stderr, "[ramkolfxd] using synthetic spherical-head HRTF model @ %.0f Hz\n", SampleRate);
     }
     else
     {
@@ -156,12 +156,12 @@ BinauralStage::BinauralStage(const SpeakerLayout& InLayout, HrtfSourceKind Kind,
                 LeftConvolvers[k].Load(DelayedLeft.data(), static_cast<uint32>(DelayedLeft.size()));
                 RightConvolvers[k].Load(DelayedRight.data(), static_cast<uint32>(DelayedRight.size()));
             }
-            fprintf(stderr, "[audiobatd] loaded HRTF SOFA file '%s' (%d taps @ %.0f Hz, normalized x%.3f)\n",
+            fprintf(stderr, "[ramkolfxd] loaded HRTF SOFA file '%s' (%d taps @ %.0f Hz, normalized x%.3f)\n",
                     SofaPath.c_str(), Hrtf.FilterLength(), SampleRate, NormalizationGain);
         }
         else
         {
-            fprintf(stderr, "[audiobatd] Advanced spatial mode will fall back to algebraic decode until a "
+            fprintf(stderr, "[ramkolfxd] Advanced spatial mode will fall back to algebraic decode until a "
                              "valid HRTF SOFA file is available\n");
         }
     }
@@ -376,4 +376,4 @@ void BinauralStage::CollectVoiceGarbage()
     }
 }
 
-} // namespace audiobat
+} // namespace ramkolfx

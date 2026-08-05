@@ -17,7 +17,7 @@ and today's far-field-measured HRTFs (SADIE II, MIT KEMAR, and the
 synthetic spherical-head fallback all built earlier this session) have no
 distance term at all, so this needs new DSP, not just a UI slider.
 
-**This whole feature is a toggle, off by default.** When off, AudioBat's
+**This whole feature is a toggle, off by default.** When off, RamkolFX's
 signal path is *literally* today's shipped code, unmodified — not just
 "equivalent behavior," the same code path, so there's zero regression risk
 for anyone who doesn't turn it on. When on, distance affects loudness
@@ -134,7 +134,7 @@ handling, or mute/solo (handled upstream in `AudioEngine`, never touches
   `AmbisonicsStage` keeps using `SnapshotDirections()` unchanged for Basic
   mode regardless of the toggle.
 
-## Protocol (`common/include/audiobat/protocol.hpp` + `.cpp`)
+## Protocol (`common/include/ramkolfx/protocol.hpp` + `.cpp`)
 
 - New opcode `SetNearFieldEnabled` (`bool`) → `StatusResponse`, mirroring
   `SetTestNoise`/`EncodeSetTestNoiseRequest` exactly.

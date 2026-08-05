@@ -1,16 +1,16 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
 
 #pragma once
 
-#include "audiobat/types.hpp"
+#include "ramkolfx/types.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Abstract interface for a spatialization DSP stage sitting between the
@@ -39,4 +39,4 @@ public:
 // constant once, at construction, rather than allocating inside Process().
 inline constexpr uint32 MaxProcessFrames = 8192;
 
-} // namespace audiobat
+} // namespace ramkolfx

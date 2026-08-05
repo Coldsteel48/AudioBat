@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -11,18 +11,18 @@
 #include <functional>
 #include <string>
 
-#include "audiobat/types.hpp"
+#include "ramkolfx/types.hpp"
 
 struct pw_stream;
 struct pw_loop;
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Wraps a PipeWire playback stream that sends the final processed stereo
 // mix out to a specific real hardware sink, pinned by PipeWire node name
 // rather than "whatever is currently the default sink". This is what makes
-// it safe to set the AudioBat virtual sink as the system default: without
+// it safe to set the RamkolFX virtual sink as the system default: without
 // a pinned target, the output stream would resolve "default" to the
 // virtual sink itself and feed back into the capture side.
 class HardwareOutput
@@ -91,4 +91,4 @@ private:
     std::string TargetNodeName;
 };
 
-} // namespace audiobat
+} // namespace ramkolfx

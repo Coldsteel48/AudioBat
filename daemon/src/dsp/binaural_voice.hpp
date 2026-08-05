@@ -1,20 +1,20 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
 
 #pragma once
 
-#include "audiobat/types.hpp"
+#include "ramkolfx/types.hpp"
 #include "binaural_stage.hpp" // HrtfSourceKind
 #include "crossfading_slot.hpp"
 #include "hrtf_loader.hpp"
 #include "partitioned_convolver.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // One direction+distance's loaded Left/Right convolver pair - the "live"
@@ -84,4 +84,4 @@ private:
     CrossfadingSlot<BinauralVoiceFilter> Slot;
 };
 
-} // namespace audiobat
+} // namespace ramkolfx

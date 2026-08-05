@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -15,9 +15,9 @@
 #include <string>
 #include <vector>
 
-#include "audiobat/protocol.hpp"
-#include "audiobat/ring_buffer.hpp"
-#include "audiobat/types.hpp"
+#include "ramkolfx/protocol.hpp"
+#include "ramkolfx/ring_buffer.hpp"
+#include "ramkolfx/types.hpp"
 #include "dsp/speaker_layout.hpp"
 #include "hrtf_catalog.hpp"
 #include "settings_store.hpp"
@@ -25,7 +25,7 @@
 struct pw_main_loop;
 struct pw_loop;
 
-namespace audiobat
+namespace ramkolfx
 {
 
 class VirtualSink;
@@ -116,7 +116,7 @@ private:
     std::string ResolveInitialOutputDevice(const std::optional<PersistedSettings>& LoadedSettings) const;
 
     // Resolves the SOFA file BinauralStage should load initially: the
-    // AUDIOBAT_HRTF_SOFA environment variable if set, else the bundled
+    // RAMKOLFX_HRTF_SOFA environment variable if set, else the bundled
     // default (see data/hrtf/README.md). The GetHrtfCatalog/SetHrtfFile
     // control opcodes are the normal way to switch afterward; this is a
     // lower-level override for a SOFA file outside the catalog entirely.
@@ -130,8 +130,8 @@ private:
     static std::vector<HrtfCatalogEntry> BuildHrtfCatalog();
 
     // Resolves the directory the daemon watches for user-supplied SOFA
-    // files: AUDIOBAT_HRTF_DIR if set, else $XDG_CONFIG_HOME/audiobat/hrtf
-    // (falling back to ~/.config/audiobat/hrtf, mirroring SettingsStore's
+    // files: RAMKOLFX_HRTF_DIR if set, else $XDG_CONFIG_HOME/ramkolfx/hrtf
+    // (falling back to ~/.config/ramkolfx/hrtf, mirroring SettingsStore's
     // own XDG resolution), created if it doesn't exist yet. Unlike the
     // bundled catalog, files placed here are never vetted for license or
     // validity - see data/hrtf/README.md.
@@ -228,4 +228,4 @@ private:
     std::vector<float> InputScratch;
 };
 
-} // namespace audiobat
+} // namespace ramkolfx

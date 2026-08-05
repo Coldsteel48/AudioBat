@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -10,10 +10,10 @@
 
 #include <vector>
 
-#include "audiobat/protocol.hpp"
+#include "ramkolfx/protocol.hpp"
 #include "control_client.hpp"
 
-namespace audiobat::gui
+namespace ramkolfx::gui
 {
 
 // Owns the control connection and draws the whole UI. Tick() is called
@@ -57,4 +57,4 @@ private:
     bool bMirrorModeEnabled = false;
 };
 
-} // namespace audiobat::gui
+} // namespace ramkolfx::gui

@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -10,7 +10,7 @@
 
 #include "hrtf_filter.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Procedurally-computed stand-in for a measured HRTF: a rigid-sphere head
@@ -26,11 +26,11 @@ namespace audiobat
 // replacement for measured data - expect noticeably weaker front/back and
 // externalization cues than any of the bundled SADIE II/KEMAR sources.
 //
-// Matches AudioBat's azimuth convention (0 = front, positive = left) and
+// Matches RamkolFX's azimuth convention (0 = front, positive = left) and
 // HrtfLoader::GetFilter's signature so BinauralStage can use either
 // interchangeably. ElevationDegrees is accepted for interface symmetry
 // but ignored: every caller in this pipeline only ever sources from
 // horizontal-plane 7.1 speakers.
 HrtfFilter ComputeSphericalHeadFilter(float AzimuthDegrees, float ElevationDegrees, float SampleRate);
 
-} // namespace audiobat
+} // namespace ramkolfx

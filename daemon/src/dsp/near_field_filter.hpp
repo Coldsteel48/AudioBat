@@ -1,7 +1,7 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
@@ -10,7 +10,7 @@
 
 #include "hrtf_filter.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 // Near-field proximity correction: as a source approaches the head, head
@@ -50,7 +50,7 @@ namespace audiobat
 // Raw per-ear near-field shelf for one source's direction and distance,
 // not yet combined with any far-field HRTF - exposed separately so it can
 // be inspected/verified in isolation (see docs/near-field-distance-plan.md's
-// Verification section). AzimuthDegrees: AudioBat convention (0 = front,
+// Verification section). AzimuthDegrees: RamkolFX convention (0 = front,
 // positive = left). DistanceMeters: expected pre-clamped to
 // [MinSpeakerDistanceMeters, MaxSpeakerDistanceMeters] (protocol.hpp) by
 // the caller; this function clamps defensively too.
@@ -64,4 +64,4 @@ HrtfFilter ComputeNearFieldCorrection(float AzimuthDegrees, float DistanceMeters
 HrtfFilter ApplyNearFieldCorrection(const HrtfFilter& FarFieldFilter, float AzimuthDegrees,
                                      float DistanceMeters, float SampleRate);
 
-} // namespace audiobat
+} // namespace ramkolfx

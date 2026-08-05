@@ -1,14 +1,14 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
 
 #include "hrtf_deck.hpp"
 
-namespace audiobat
+namespace ramkolfx
 {
 
 HrtfDeck::HrtfDeck(const SpeakerLayout& InLayout, HrtfSourceKind Kind, const std::string& SofaPath,
@@ -63,4 +63,4 @@ void HrtfDeck::Process(const float* Input, uint32 InputChannels,
         Output, Frames);
 }
 
-} // namespace audiobat
+} // namespace ramkolfx

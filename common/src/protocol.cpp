@@ -1,12 +1,12 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
 
-#include "audiobat/protocol.hpp"
+#include "ramkolfx/protocol.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -16,7 +16,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-namespace audiobat
+namespace ramkolfx
 {
 
 namespace
@@ -471,13 +471,13 @@ std::string DefaultControlSocketPath()
 {
     if (const char* RuntimeDir = std::getenv("XDG_RUNTIME_DIR"))
     {
-        std::string Dir = std::string(RuntimeDir) + "/audiobat";
+        std::string Dir = std::string(RuntimeDir) + "/ramkolfx";
         mkdir(Dir.c_str(), 0700);
         return Dir + "/control.sock";
     }
-    std::string Dir = "/tmp/audiobat-" + std::to_string(getuid());
+    std::string Dir = "/tmp/ramkolfx-" + std::to_string(getuid());
     mkdir(Dir.c_str(), 0700);
     return Dir + "/control.sock";
 }
 
-} // namespace audiobat
+} // namespace ramkolfx

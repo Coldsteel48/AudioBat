@@ -1,17 +1,17 @@
-// AudioBat
+// RamkolFX
 // Copyright (C) 2026 Roman Levin (Coldsteel48)
 //
-// This file is part of AudioBat, dual-licensed under the GNU General
+// This file is part of RamkolFX, dual-licensed under the GNU General
 // Public License v3.0 (see LICENSE) or a separate commercial license
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
 
 // CMake-generated: absolute path to the bundled default HRTF SOFA file
-// (see data/hrtf/README.md), used when AUDIOBAT_HRTF_SOFA isn't set.
+// (see data/hrtf/README.md), used when RAMKOLFX_HRTF_SOFA isn't set.
 
 #pragma once
 
-namespace audiobat
+namespace ramkolfx
 {
-inline constexpr const char* DefaultHrtfSofaPath = "@AUDIOBAT_DEFAULT_HRTF_SOFA_PATH@";
-} // namespace audiobat
+inline constexpr const char* DefaultHrtfSofaPath = "@RAMKOLFX_DEFAULT_HRTF_SOFA_PATH@";
+} // namespace ramkolfx

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Configures and builds the AudioBat daemon and GUI.
+# Configures and builds the RamkolFX daemon and GUI.
 #
 # Usage:
 #   ./build.sh              # Debug/RelWithDebInfo build of daemon + GUI
@@ -14,10 +14,10 @@ if [[ "${1:-}" == "clean" ]]; then
     rm -rf "$BUILD_DIR"
 fi
 
-cmake -S . -B "$BUILD_DIR" -G Ninja -DAUDIOBAT_BUILD_GUI=ON
+cmake -S . -B "$BUILD_DIR" -G Ninja -DRAMKOLFX_BUILD_GUI=ON
 cmake --build "$BUILD_DIR"
 
 echo
 echo "Build complete:"
-echo "  daemon: $BUILD_DIR/daemon/audiobatd"
-echo "  gui:    $BUILD_DIR/gui/audiobat-gui"
+echo "  daemon: $BUILD_DIR/daemon/ramkolfxd"
+echo "  gui:    $BUILD_DIR/gui/ramkolfx-gui"
