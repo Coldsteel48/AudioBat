@@ -46,6 +46,7 @@ add_executable(ramkolfx-gui
     src/main.cpp
     src/app.cpp
     src/control_client.cpp
+    src/gui_prefs.cpp
     src/position_dial.cpp
     src/renderer_opengl3.cpp
 )

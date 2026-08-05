@@ -243,7 +243,10 @@ void App::DrawUI()
     ImGui::Spacing();
     ImGui::TextUnformatted(
         "Speaker positions (drag: angle + distance; click a label to mute, Ctrl+click to solo)");
-    ImGui::Checkbox("Mirror left/right", &bMirrorModeEnabled);
+    if (ImGui::Checkbox("Mirror left/right", &bMirrorModeEnabled))
+    {
+        SaveGuiPreferences({.bMirrorModeEnabled = bMirrorModeEnabled});
+    }
     if (ImGui::IsItemHovered())
     {
         ImGui::SetTooltip("When on, dragging FL/FR, RL/RR, or SL/SR also drags its counterpart to the "

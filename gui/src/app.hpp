@@ -12,6 +12,7 @@
 
 #include "ramkolfx/protocol.hpp"
 #include "control_client.hpp"
+#include "gui_prefs.hpp"
 
 namespace ramkolfx::gui
 {
@@ -21,7 +22,7 @@ namespace ramkolfx::gui
 class App
 {
 public:
-    explicit App(float InDpiScale) : DpiScale(InDpiScale)
+    explicit App(float InDpiScale) : DpiScale(InDpiScale), bMirrorModeEnabled(LoadGuiPreferences().bMirrorModeEnabled)
     {
     }
 
@@ -53,7 +54,8 @@ private:
 
     // Local-only UX toggle (never sent to the daemon): when on, dragging a
     // left/right speaker also drags its mirrored counterpart - see
-    // DrawPositionDial's bMirrorEnabled.
+    // DrawPositionDial's bMirrorEnabled. Persisted separately via
+    // gui_prefs.hpp since it never touches the daemon's SettingsStore.
     bool bMirrorModeEnabled = false;
 };
 
