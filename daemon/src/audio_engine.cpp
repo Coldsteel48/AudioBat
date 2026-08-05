@@ -48,10 +48,10 @@ namespace
 // what AudioEngine will ever actually pass to Process().
 constexpr uint32_t MaxScratchFrames = MaxProcessFrames;
 
-// Hardcoded fallback (Arctis 7P+ Analog Stereo, from `wpctl status` /
-// `pw-cli info <sink-id>`), only used on first run before any output
-// device has ever been chosen via SetOutputDevice - see Run()'s
-// InitialOutputDevice, which prefers a persisted choice when one exists.
+// Last-resort fallback, only reached if DeviceRegistry hasn't discovered
+// any real hardware sink at all by the time Run() picks an initial output
+// device (see ResolveInitialOutputDevice) - normally that never happens,
+// since a persisted choice or an auto-picked live sink both win first.
 constexpr const char* TestOutputNodeName = "alsa_output.usb-SteelSeries_Arctis_7P_-00.analog-stereo";
 
 // Raw 7.1 input channel order, matching the layout VirtualSink captures
@@ -85,6 +85,28 @@ AudioEngine::AudioEngine() = default;
 AudioEngine::~AudioEngine()
 {
     Teardown();
+}
+
+std::string AudioEngine::ResolveInitialOutputDevice(const std::optional<PersistedSettings>& LoadedSettings) const
+{
+    if (LoadedSettings && !LoadedSettings->OutputDeviceName.empty())
+    {
+        if (Devices->HasDevice(LoadedSettings->OutputDeviceName))
+        {
+            return LoadedSettings->OutputDeviceName;
+        }
+        fprintf(stderr,
+                "[audiobatd] saved output device '%s' not found, falling back to auto-selection\n",
+                LoadedSettings->OutputDeviceName.c_str());
+    }
+
+    if (const std::optional<std::string> Picked = Devices->PickAnyDevice())
+    {
+        return *Picked;
+    }
+
+    fprintf(stderr, "[audiobatd] no output devices found, falling back to '%s'\n", TestOutputNodeName);
+    return TestOutputNodeName;
 }
 
 std::string AudioEngine::ResolveHrtfSofaPath()
@@ -376,13 +398,31 @@ int AudioEngine::Run()
         return 1;
     }
 
-    // A persisted output device choice overrides the hardcoded test target
-    // above (see TestOutputNodeName's own comment - this is the "future
-    // control-protocol command" it refers to, now that SetOutputDevice
-    // exists and is remembered).
-    const std::string InitialOutputDevice =
-        (LoadedSettings && !LoadedSettings->OutputDeviceName.empty()) ? LoadedSettings->OutputDeviceName
-                                                                       : TestOutputNodeName;
+    // Started before Output below (and given a moment to enumerate what's
+    // already in the PipeWire graph via WaitForInitialSync) so
+    // ResolveInitialOutputDevice can validate a persisted device choice, or
+    // auto-pick a live one, instead of blindly trusting a name that might
+    // no longer exist.
+    Devices = std::make_unique<DeviceRegistry>(Loop);
+    if (!Devices->Start())
+    {
+        Teardown();
+        return 1;
+    }
+    Devices->WaitForInitialSync();
+
+    const std::string InitialOutputDevice = ResolveInitialOutputDevice(LoadedSettings);
+    if (!LoadedSettings || LoadedSettings->OutputDeviceName != InitialOutputDevice)
+    {
+        // First run (nothing persisted yet) or the persisted device is
+        // gone - remember whatever we resolved to instead so the next
+        // start (and the GUI's picker) reflect it rather than re-running
+        // this fallback every time.
+        PersistedSettings ToSave = LoadedSettings.value_or(PersistedSettings{});
+        ToSave.OutputDeviceName = InitialOutputDevice;
+        Settings.Save(ToSave);
+    }
+
     Output = std::make_unique<HardwareOutput>(Loop, InitialOutputDevice);
     Output->SetFillCallback(
         [this](float* Interleaved, uint32_t Frames)
@@ -390,13 +430,6 @@ int AudioEngine::Run()
             return HandleHardwareOutputRequest(Interleaved, Frames);
         });
     if (!Output->Start())
-    {
-        Teardown();
-        return 1;
-    }
-
-    Devices = std::make_unique<DeviceRegistry>(Loop);
-    if (!Devices->Start())
     {
         Teardown();
         return 1;

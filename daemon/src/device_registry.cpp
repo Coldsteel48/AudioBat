@@ -8,8 +8,10 @@
 
 #include "device_registry.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 
 #include <pipewire/extensions/metadata.h>
 #include <pipewire/pipewire.h>
@@ -42,6 +44,31 @@ const struct pw_registry_events RegistryEvents = []
     Events.version = PW_VERSION_REGISTRY_EVENTS;
     Events.global = OnGlobalAdded;
     Events.global_remove = OnGlobalRemoved;
+    return Events;
+}();
+
+// WaitForInitialSync's roundtrip state: a pointer to this struct is the
+// pw_core_events 'done' listener's user data.
+struct CoreSyncState
+{
+    int PendingSeq = -1;
+    bool bDone = false;
+};
+
+void OnCoreDone(void* UserData, uint32_t Id, int Seq)
+{
+    auto* State = static_cast<CoreSyncState*>(UserData);
+    if (Id == PW_ID_CORE && Seq == State->PendingSeq)
+    {
+        State->bDone = true;
+    }
+}
+
+const struct pw_core_events CoreEvents = []
+{
+    struct pw_core_events Events{};
+    Events.version = PW_VERSION_CORE_EVENTS;
+    Events.done = OnCoreDone;
     return Events;
 }();
 
@@ -97,6 +124,27 @@ bool DeviceRegistry::Start()
 
     pw_registry_add_listener(Registry, &RegistryListener, &RegistryEvents, this);
     return true;
+}
+
+bool DeviceRegistry::WaitForInitialSync(int TimeoutMs)
+{
+    CoreSyncState State;
+    spa_hook CoreListener{};
+    pw_core_add_listener(Core, &CoreListener, &CoreEvents, &State);
+    State.PendingSeq = pw_core_sync(Core, PW_ID_CORE, 0);
+
+    const auto Deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(TimeoutMs);
+    while (!State.bDone && std::chrono::steady_clock::now() < Deadline)
+    {
+        pw_loop_iterate(Loop, 50);
+    }
+
+    spa_hook_remove(&CoreListener);
+    if (!State.bDone)
+    {
+        fprintf(stderr, "[audiobatd] device registry initial sync timed out after %dms\n", TimeoutMs);
+    }
+    return State.bDone;
 }
 
 void DeviceRegistry::HandleGlobalAdded(uint32_t Id, const char* Type, const spa_dict* Props)
@@ -185,6 +233,35 @@ std::vector<AudioDeviceInfo> DeviceRegistry::GetDevices() const
         Result.push_back(Info);
     }
     return Result;
+}
+
+bool DeviceRegistry::HasDevice(const std::string& Name) const
+{
+    std::lock_guard<std::mutex> Lock(DevicesMutex);
+    for (const auto& [Id, Info] : DevicesById)
+    {
+        if (Info.Name == Name)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::optional<std::string> DeviceRegistry::PickAnyDevice() const
+{
+    std::lock_guard<std::mutex> Lock(DevicesMutex);
+    uint32_t LowestId = std::numeric_limits<uint32_t>::max();
+    const AudioDeviceInfo* Picked = nullptr;
+    for (const auto& [Id, Info] : DevicesById)
+    {
+        if (Id < LowestId)
+        {
+            LowestId = Id;
+            Picked = &Info;
+        }
+    }
+    return Picked ? std::make_optional(Picked->Name) : std::nullopt;
 }
 
 } // namespace audiobat

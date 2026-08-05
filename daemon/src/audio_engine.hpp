@@ -11,6 +11,7 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -102,6 +103,16 @@ private:
 
     // Returns whichever concrete stage Mode currently selects.
     DspStage& ActiveStage();
+
+    // Picks the output device Run() should start HardwareOutput on: a
+    // persisted choice from LoadedSettings if it's non-empty and still
+    // present in Devices (populated via a prior WaitForInitialSync() call),
+    // otherwise an arbitrary currently-available real sink (first run, or
+    // the saved device having disappeared - e.g. unplugged/renamed since
+    // last run), otherwise the last-resort hardcoded TestOutputNodeName if
+    // Devices has discovered no real sinks at all yet. Doesn't persist the
+    // result itself - Run() does that if it differs from what was loaded.
+    std::string ResolveInitialOutputDevice(const std::optional<PersistedSettings>& LoadedSettings) const;
 
     // Resolves the SOFA file BinauralStage should load initially: the
     // AUDIOBAT_HRTF_SOFA environment variable if set, else the bundled

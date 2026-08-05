@@ -212,9 +212,14 @@ against a daemon that's already running.
 
 Starting the daemon creates the "AudioBat Virtual Sink" in the PipeWire
 graph and starts a playback stream pinned to a specific real hardware sink
-(hardcoded in `AudioEngine::Run()` for now; swap live via
-`SetOutputDevice` / the GUI's output device picker). The daemon also
-claims the virtual sink as your system default output as soon as it
+(swap live via `SetOutputDevice` / the GUI's output device picker). On
+first run, or if the previously-chosen device is no longer present (e.g.
+unplugged, renamed), the daemon auto-picks whichever real sink PipeWire
+currently reports and persists that choice to `settings.conf`, alongside
+mode/speaker layout/HRTF choice (see `SettingsStore`); the next run reuses
+it, and any live pick made from the GUI is remembered the same way. The
+daemon also claims the virtual sink as your system default output as soon
+as it
 starts (see `DeviceRegistry::ClaimVirtualSinkAsDefault()`), so most apps
 route to it automatically with no manual step. If you'd rather route a
 specific app instead of changing the system default, use `pavucontrol`,

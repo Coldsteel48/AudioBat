@@ -10,6 +10,8 @@
 
 #include <cstdint>
 #include <mutex>
+#include <optional>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -59,8 +61,29 @@ public:
     // Returns false on failure.
     bool Start();
 
+    // Blocks (pumping Loop directly) until a pw_core_sync roundtrip
+    // confirms every registry event pending at the time of the call has
+    // been dispatched - in particular, the 'global' events for sinks that
+    // already existed when Start() connected, which otherwise only arrive
+    // once something else drives Loop (normally pw_main_loop_run(), not
+    // yet running at the call site this exists for). Only safe to call
+    // before the loop is being driven by another thread. Gives up and
+    // returns false after TimeoutMs if no sync response arrives.
+    bool WaitForInitialSync(int TimeoutMs = 1000);
+
     // Safe to call from any thread.
     std::vector<AudioDeviceInfo> GetDevices() const;
+
+    // True if a currently-known real hardware sink's node.name matches
+    // Name. Safe to call from any thread.
+    bool HasDevice(const std::string& Name) const;
+
+    // Returns the node.name of an arbitrary currently-known real hardware
+    // sink (the one with the lowest PipeWire global id, so the result is
+    // deterministic for a given graph rather than depending on
+    // unordered_map iteration order), or nullopt if none are known yet.
+    // Safe to call from any thread.
+    std::optional<std::string> PickAnyDevice() const;
 
     // pw_registry callback trampoline targets; not for external use.
     void HandleGlobalAdded(uint32_t Id, const char* Type, const spa_dict* Props);
