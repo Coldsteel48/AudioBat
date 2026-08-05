@@ -201,20 +201,26 @@ works from anywhere).
 ## Running
 
 ```sh
-./build/daemon/audiobatd
+./run.sh
 ```
 
-This creates the "AudioBat Virtual Sink" in the PipeWire graph and starts a
-playback stream pinned to a specific real hardware sink (hardcoded in
-`AudioEngine::Run()` for now; swap live via `SetOutputDevice` / the GUI's
-output device picker). The daemon also claims the virtual sink as your
-system default output as soon as it starts (see `DeviceRegistry::
-ClaimVirtualSinkAsDefault()`), so most apps route to it automatically with
-no manual step. If you'd rather route a specific app instead of changing
-the system default, use `pavucontrol`, `wpctl`, or `pw-play --target
-audiobat_virtual_sink some_7.1_file.wav`. Stop the daemon with Ctrl+C or
-`SIGTERM`; it tears down the virtual sink and unlinks the control socket
-on the way out.
+This starts `audiobatd` in the background, waits for its control socket to
+come up, then launches `audiobat-gui` in the foreground; the daemon stops
+when the GUI exits or on Ctrl+C. Run `./run.sh daemon` to start only the
+daemon (foreground, no GUI), or `./run.sh gui` to launch only the GUI
+against a daemon that's already running.
+
+Starting the daemon creates the "AudioBat Virtual Sink" in the PipeWire
+graph and starts a playback stream pinned to a specific real hardware sink
+(hardcoded in `AudioEngine::Run()` for now; swap live via
+`SetOutputDevice` / the GUI's output device picker). The daemon also
+claims the virtual sink as your system default output as soon as it
+starts (see `DeviceRegistry::ClaimVirtualSinkAsDefault()`), so most apps
+route to it automatically with no manual step. If you'd rather route a
+specific app instead of changing the system default, use `pavucontrol`,
+`wpctl`, or `pw-play --target audiobat_virtual_sink some_7.1_file.wav`.
+Stop the daemon with Ctrl+C or `SIGTERM`; it tears down the virtual sink
+and unlinks the control socket on the way out.
 
 Setting the virtual sink as default is safe against feedback: the
 daemon's own hardware output stream is pinned by `target.object` (and
@@ -222,22 +228,6 @@ daemon's own hardware output stream is pinned by `target.object` (and
 never resolves to "whatever is default" and can't loop back into the
 virtual sink it just claimed.
 
-### Testing the control socket manually
-
-No client app exists yet, but you can poke the protocol directly with
-`socat` (`[opcode: u8][length: u16 BE][payload]`, see
-`common/include/audiobat/protocol.hpp`):
-
-```sh
-# GetStatus (0x01, no payload), then SetSpatialMode(Advanced) (0x02, len=1, payload=2)
-printf '\x01\x00\x00\x02\x00\x01\x02' | \
-    socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/audiobat/control.sock | od -An -tx1
-```
-
-`SpatialMode` payload byte: `0` = Off, `1` = Basic (algebraic ambisonics),
-`2` = Advanced (HRTF binaural). Each reply is `[0x81][len=29][SpatialMode
-byte][7 x speaker azimuth: f32 BE]` (status) or `[0x82][len][message]`
-(error).
 
 ## Adding your own SOFA files
 
