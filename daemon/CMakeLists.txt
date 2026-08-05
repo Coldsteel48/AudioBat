@@ -93,6 +93,8 @@ add_executable(ramkolfxd
     src/dsp/biquad.cpp
     src/dsp/graphic_eq_filter.cpp
     src/dsp/hw_eq_stage.cpp
+    src/dsp/bass_enhancer_filter.cpp
+    src/dsp/bass_enhancer_stage.cpp
     src/control/control_server.cpp
 )
 

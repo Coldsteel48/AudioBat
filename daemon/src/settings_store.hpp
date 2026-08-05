@@ -43,6 +43,11 @@ struct PersistedSettings
     std::string ActiveHrtfDisplayName;
 
     std::array<EqBand, MaxEqBands> HwEqBands = DefaultHwEqBands();
+
+    // Headphone bass enhancer (see dsp/bass_enhancer_filter.hpp). Defaults
+    // to disabled, so upgrading an existing install doesn't suddenly
+    // change what playback sounds like.
+    BassEnhancerSettings BassEnhancer;
 };
 
 // Loads/saves PersistedSettings as a small text file under

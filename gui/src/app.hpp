@@ -25,7 +25,8 @@ class App
 public:
     explicit App(float InDpiScale)
         : DpiScale(InDpiScale), bMirrorModeEnabled(LoadGuiPreferences().bMirrorModeEnabled),
-          bAdvancedEqMode(LoadGuiPreferences().bAdvancedEqMode)
+          bAdvancedEqMode(LoadGuiPreferences().bAdvancedEqMode),
+          bAdvancedBassMode(LoadGuiPreferences().bAdvancedBassMode)
     {
     }
 
@@ -75,6 +76,17 @@ private:
     // - local-only UX toggle, persisted via gui_prefs.hpp same as
     // bMirrorModeEnabled.
     bool bAdvancedEqMode = false;
+
+    // Local cache of the current bass enhancer settings - fetched once on
+    // connect/reconnect via RequestBassEnhancerState() and kept in sync
+    // optimistically as the user adjusts controls, same pattern as
+    // HwEqBands.
+    BassEnhancerSettings BassEnhancer{};
+
+    // Whether the bass enhancer panel shows Cutoff/Drive controls -
+    // local-only UX toggle, persisted via gui_prefs.hpp same as
+    // bAdvancedEqMode.
+    bool bAdvancedBassMode = false;
 };
 
 } // namespace ramkolfx::gui

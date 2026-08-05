@@ -36,6 +36,7 @@ class PassthroughStage;
 class AmbisonicsStage;
 class HrtfDeck;
 class HwEqStage;
+class BassEnhancerStage;
 class ControlServer;
 class DeviceRegistry;
 class SingleInstanceLock;
@@ -211,6 +212,13 @@ private:
     // HrtfCatalogMutex).
     std::mutex HwEqMutex;
     std::array<EqBand, MaxEqBands> HwEqBandState;
+
+    // Headphone bass enhancer - runs after HwEq on the same final
+    // downmixed stereo signal (see HandleVirtualSinkAudio). Same
+    // control-thread-source-of-truth pattern as HwEqBandState/HwEqMutex.
+    std::unique_ptr<BassEnhancerStage> BassEnhancer;
+    std::mutex BassEnhancerMutex;
+    BassEnhancerSettings BassEnhancerSettingsState;
 
     // Bundled catalog (BuildHrtfCatalog()) plus whatever's currently in
     // UserHrtfDirectory; index into this is what the GetHrtfCatalog/

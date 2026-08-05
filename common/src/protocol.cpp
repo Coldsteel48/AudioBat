@@ -70,6 +70,27 @@ EqBand ReadEqBand(const uint8* Payload)
     return Band;
 }
 
+void AppendBassEnhancerSettings(std::vector<uint8>& Out, const BassEnhancerSettings& Settings)
+{
+    Out.push_back(Settings.bEnabled ? 1 : 0);
+    AppendFloatBE(Out, Settings.CutoffHz);
+    AppendFloatBE(Out, Settings.Drive);
+    AppendFloatBE(Out, Settings.Mix);
+}
+
+// Reads a fixed BassEnhancerWireSize-byte BassEnhancerSettings from
+// `Payload`. Caller must have already verified that many bytes are
+// available.
+BassEnhancerSettings ReadBassEnhancerSettings(const uint8* Payload)
+{
+    BassEnhancerSettings Settings;
+    Settings.bEnabled = Payload[0] != 0;
+    Settings.CutoffHz = ReadFloatBE(Payload + 1);
+    Settings.Drive = ReadFloatBE(Payload + 5);
+    Settings.Mix = ReadFloatBE(Payload + 9);
+    return Settings;
+}
+
 // Appends a length-prefixed (u16 BE) string. Used for fields embedded
 // alongside fixed-size data (Status, DeviceListResponse) where a raw
 // whole-payload string (like ErrorResponse's) wouldn't be unambiguous.
@@ -211,6 +232,15 @@ std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8* Payload, uint
         OutCommand.PresetName = std::string(reinterpret_cast<const char*>(Payload), PayloadLength);
         return OutCommand;
     case Opcode::GetHwEqState:
+        return OutCommand;
+    case Opcode::SetBassEnhancer:
+        if (PayloadLength != static_cast<uint16>(BassEnhancerWireSize))
+        {
+            return std::nullopt;
+        }
+        OutCommand.BassEnhancer = ReadBassEnhancerSettings(Payload);
+        return OutCommand;
+    case Opcode::GetBassEnhancerState:
         return OutCommand;
     case Opcode::GetContentStreams:
         return OutCommand;
@@ -373,6 +403,16 @@ std::optional<std::array<EqBand, MaxEqBands>> DecodeHwEqStateResponse(const uint
     return Bands;
 }
 
+std::optional<BassEnhancerSettings> DecodeBassEnhancerStateResponse(const uint8* Payload,
+                                                                       uint16 PayloadLength)
+{
+    if (PayloadLength != static_cast<uint16>(BassEnhancerWireSize))
+    {
+        return std::nullopt;
+    }
+    return ReadBassEnhancerSettings(Payload);
+}
+
 std::optional<std::vector<ContentStreamInfo>> DecodeContentStreamListResponse(const uint8* Payload,
                                                                                  uint16 PayloadLength)
 {
@@ -531,6 +571,19 @@ std::vector<uint8> EncodeHwEqStateResponse(const std::array<EqBand, MaxEqBands>&
     std::vector<uint8> Out;
     Out.reserve(HeaderSize + Payload.size());
     AppendHeader(Out, Opcode::HwEqStateResponse, static_cast<uint16>(Payload.size()));
+    Out.insert(Out.end(), Payload.begin(), Payload.end());
+    return Out;
+}
+
+std::vector<uint8> EncodeBassEnhancerStateResponse(const BassEnhancerSettings& Settings)
+{
+    std::vector<uint8> Payload;
+    Payload.reserve(BassEnhancerWireSize);
+    AppendBassEnhancerSettings(Payload, Settings);
+
+    std::vector<uint8> Out;
+    Out.reserve(HeaderSize + Payload.size());
+    AppendHeader(Out, Opcode::BassEnhancerStateResponse, static_cast<uint16>(Payload.size()));
     Out.insert(Out.end(), Payload.begin(), Payload.end());
     return Out;
 }
@@ -730,6 +783,22 @@ std::vector<uint8> EncodeGetHwEqStateRequest()
 {
     std::vector<uint8> Out;
     AppendHeader(Out, Opcode::GetHwEqState, 0);
+    return Out;
+}
+
+std::vector<uint8> EncodeSetBassEnhancerRequest(const BassEnhancerSettings& Settings)
+{
+    std::vector<uint8> Out;
+    Out.reserve(HeaderSize + BassEnhancerWireSize);
+    AppendHeader(Out, Opcode::SetBassEnhancer, static_cast<uint16>(BassEnhancerWireSize));
+    AppendBassEnhancerSettings(Out, Settings);
+    return Out;
+}
+
+std::vector<uint8> EncodeGetBassEnhancerStateRequest()
+{
+    std::vector<uint8> Out;
+    AppendHeader(Out, Opcode::GetBassEnhancerState, 0);
     return Out;
 }
 

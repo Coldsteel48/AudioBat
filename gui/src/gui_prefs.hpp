@@ -25,6 +25,12 @@ struct GuiPreferences
     // (simple). Purely a display choice - the daemon's wire format is
     // already fully parametric either way, see protocol.hpp's EqBand.
     bool bAdvancedEqMode = false;
+
+    // Whether the bass enhancer panel shows Cutoff/Drive controls
+    // (advanced) or just the Enabled toggle and Amount slider (simple).
+    // Purely a display choice, same reasoning as bAdvancedEqMode - see
+    // protocol.hpp's BassEnhancerSettings.
+    bool bAdvancedBassMode = false;
 };
 
 // Reads $XDG_CONFIG_HOME/ramkolfx/gui_prefs.conf (falling back to

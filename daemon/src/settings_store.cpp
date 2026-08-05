@@ -147,6 +147,10 @@ std::optional<PersistedSettings> SettingsStore::Load() const
         Band.GainDb = GetFloat(HwEqBandKey(i, "gain"), Band.GainDb);
         Band.Q = GetFloat(HwEqBandKey(i, "q"), Band.Q);
     }
+    Result.BassEnhancer.bEnabled = GetBool("bass_enhancer.enabled", Result.BassEnhancer.bEnabled);
+    Result.BassEnhancer.CutoffHz = GetFloat("bass_enhancer.cutoff_hz", Result.BassEnhancer.CutoffHz);
+    Result.BassEnhancer.Drive = GetFloat("bass_enhancer.drive", Result.BassEnhancer.Drive);
+    Result.BassEnhancer.Mix = GetFloat("bass_enhancer.mix", Result.BassEnhancer.Mix);
     return Result;
 }
 
@@ -171,6 +175,10 @@ void SettingsStore::Save(const PersistedSettings& InSettings) const
         Out << HwEqBandKey(i, "gain") << "=" << Band.GainDb << "\n";
         Out << HwEqBandKey(i, "q") << "=" << Band.Q << "\n";
     }
+    Out << "bass_enhancer.enabled=" << (InSettings.BassEnhancer.bEnabled ? 1 : 0) << "\n";
+    Out << "bass_enhancer.cutoff_hz=" << InSettings.BassEnhancer.CutoffHz << "\n";
+    Out << "bass_enhancer.drive=" << InSettings.BassEnhancer.Drive << "\n";
+    Out << "bass_enhancer.mix=" << InSettings.BassEnhancer.Mix << "\n";
 
     // Write-to-temp-then-rename: rename() is atomic within the same
     // directory, so a crash or power loss mid-write leaves either the old

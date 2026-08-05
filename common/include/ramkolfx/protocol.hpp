@@ -57,6 +57,8 @@ enum class Opcode : uint8
     SaveContentEqPreset = 0x13,
     GetEqPresetCatalog = 0x14,
     GetHwEqState = 0x15,
+    SetBassEnhancer = 0x16,
+    GetBassEnhancerState = 0x17,
     // Responses
     StatusResponse = 0x81,
     ErrorResponse = 0x82,
@@ -65,6 +67,7 @@ enum class Opcode : uint8
     ContentStreamListResponse = 0x85,
     EqPresetCatalogResponse = 0x86,
     HwEqStateResponse = 0x87,
+    BassEnhancerStateResponse = 0x88,
 };
 
 // The active spatialization DSP path. Off is a static-gain downmix
@@ -130,6 +133,32 @@ inline constexpr std::array<float, MaxEqBands> DefaultEqCenterFrequenciesHz = {
 // EQ bandwidth at this band spacing.
 inline constexpr float DefaultGraphicEqQ = 1.41f;
 
+// Settings for the headphone bass enhancer (see dsp/bass_enhancer_filter.hpp):
+// isolates the sub-bass band below CutoffHz, drives it through a saturating
+// nonlinearity to synthesize upper harmonics of the (often physically
+// unreproducible, on small drivers) fundamental, and blends only those
+// harmonics back in. A single global stage applied to the final downmixed
+// stereo signal, same scope as the HW EQ, and it runs after it in the
+// pipeline (see AudioEngine::HandleVirtualSinkAudio) - a final headphone-
+// tuning layer on top of whatever curve the HW EQ already applied.
+//
+// For now this is one global setting, persisted the same flat way as
+// HwEqBands (see settings_store.hpp) - not yet keyed per output-device/
+// content-app/AI preset the way the EQ's preset system is heading (see
+// SetHwEqPreset/SetContentEqBand above). Expect BassEnhancerSettings to
+// eventually fold into that same per-preset system rather than staying a
+// single always-on-top layer.
+struct BassEnhancerSettings
+{
+    bool bEnabled = false;
+    float CutoffHz = 60.0f;
+    float Drive = 0.5f;
+    float Mix = 0.5f;
+};
+
+// Wire size of BassEnhancerSettings: bEnabled(1) + cutoffHz(4) + drive(4) + mix(4).
+inline constexpr size_t BassEnhancerWireSize = 1 + 4 + 4 + 4;
+
 struct MessageHeader
 {
     Opcode MessageOpcode;
@@ -181,6 +210,7 @@ struct Command
     uint8 EqPresetIndex = 0;      // valid when CommandOpcode == SetHwEqPreset or SetContentEqPreset
     std::string PresetName;       // valid when CommandOpcode == SaveHwEqPreset or SaveContentEqPreset
     std::string ContentAppName;   // valid when CommandOpcode == SetContentEqBand, SetContentEqPreset, or SaveContentEqPreset; the persistent key from ContentStreamInfo::AppName
+    BassEnhancerSettings BassEnhancer; // valid when CommandOpcode == SetBassEnhancer
 };
 
 struct Status
@@ -256,6 +286,11 @@ std::optional<std::vector<std::string>> DecodeHrtfCatalogResponse(const uint8* P
 std::optional<std::array<EqBand, MaxEqBands>> DecodeHwEqStateResponse(const uint8* Payload,
                                                                         uint16 PayloadLength);
 
+// Decodes a BassEnhancerStateResponse payload. Returns nullopt if
+// PayloadLength isn't exactly BassEnhancerWireSize.
+std::optional<BassEnhancerSettings> DecodeBassEnhancerStateResponse(const uint8* Payload,
+                                                                       uint16 PayloadLength);
+
 // Decodes a ContentStreamListResponse payload. Same truncated/malformed
 // contract as DecodeDeviceListResponse.
 std::optional<std::vector<ContentStreamInfo>> DecodeContentStreamListResponse(const uint8* Payload,
@@ -291,6 +326,9 @@ std::vector<uint8> EncodeHrtfCatalogResponse(const std::vector<std::string>& Dis
 // is fixed (MaxEqBands * EqBandWireSize is well under MaxPayloadSize).
 std::vector<uint8> EncodeHwEqStateResponse(const std::array<EqBand, MaxEqBands>& Bands);
 
+// Encodes a full BassEnhancerStateResponse message (header + payload).
+std::vector<uint8> EncodeBassEnhancerStateResponse(const BassEnhancerSettings& Settings);
+
 // Encodes a full content stream list response message. Same drop-whole-
 // entries-past-MaxPayloadSize behavior as EncodeDeviceListResponse.
 std::vector<uint8> EncodeContentStreamListResponse(const std::vector<ContentStreamInfo>& Streams);
@@ -317,6 +355,8 @@ std::vector<uint8> EncodeSetHwEqBandRequest(uint8 BandIndex, const EqBand& Band)
 std::vector<uint8> EncodeSetHwEqPresetRequest(uint8 EqPresetIndex);
 std::vector<uint8> EncodeSaveHwEqPresetRequest(const std::string& PresetName);
 std::vector<uint8> EncodeGetHwEqStateRequest();
+std::vector<uint8> EncodeSetBassEnhancerRequest(const BassEnhancerSettings& Settings);
+std::vector<uint8> EncodeGetBassEnhancerStateRequest();
 std::vector<uint8> EncodeGetContentStreamsRequest();
 std::vector<uint8> EncodeSetContentEqBandRequest(const std::string& AppName, uint8 BandIndex,
                                                   const EqBand& Band);

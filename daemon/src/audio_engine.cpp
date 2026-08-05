@@ -25,6 +25,7 @@
 #include "control/control_server.hpp"
 #include "device_registry.hpp"
 #include "dsp/ambisonics_stage.hpp"
+#include "dsp/bass_enhancer_stage.hpp"
 #include "dsp/binaural_stage.hpp"
 #include "dsp/dsp_stage.hpp"
 #include "dsp/hrtf_deck.hpp"
@@ -319,6 +320,13 @@ int AudioEngine::Run()
     }
     HwEq = std::make_unique<HwEqStage>(HwEqBandState, static_cast<float>(HardwareOutput::SampleRate));
 
+    {
+        std::lock_guard<std::mutex> Lock(BassEnhancerMutex);
+        BassEnhancerSettingsState = LoadedSettings ? LoadedSettings->BassEnhancer : BassEnhancerSettings{};
+    }
+    BassEnhancer = std::make_unique<BassEnhancerStage>(BassEnhancerSettingsState,
+                                                        static_cast<float>(HardwareOutput::SampleRate));
+
     // Directory the daemon watches for user-supplied SOFA files - unlike
     // the bundled catalog, this isn't rebuilt on a timer: the inotify
     // watch set up below rebuilds it the moment a file is added or
@@ -483,6 +491,7 @@ void AudioEngine::Teardown()
     BasicStage.reset();
     AdvancedStage.reset();
     HwEq.reset();
+    BassEnhancer.reset();
 
     if (MainLoop)
     {
@@ -534,6 +543,8 @@ void AudioEngine::HandleVirtualSinkAudio(const float* Interleaved, uint32 Frames
                            HardwareOutput::Channels, Frames);
     HwEq->Process(DspScratch.data(), HardwareOutput::Channels, DspScratch.data(), HardwareOutput::Channels,
                   Frames);
+    BassEnhancer->Process(DspScratch.data(), HardwareOutput::Channels, DspScratch.data(),
+                           HardwareOutput::Channels, Frames);
     StereoMixBuffer.Push(DspScratch.data(), Frames * HardwareOutput::Channels);
 }
 
@@ -626,6 +637,7 @@ std::vector<uint8> AudioEngine::HandleControlCommand(const Command& InCommand)
     // already polls GetStatus at a steady ~4Hz.
     AdvancedStage->CollectGarbage();
     HwEq->CollectGarbage();
+    BassEnhancer->CollectGarbage();
 
     if (InCommand.CommandOpcode == Opcode::GetDevices)
     {
@@ -636,6 +648,12 @@ std::vector<uint8> AudioEngine::HandleControlCommand(const Command& InCommand)
     {
         std::lock_guard<std::mutex> Lock(HwEqMutex);
         return EncodeHwEqStateResponse(HwEqBandState);
+    }
+
+    if (InCommand.CommandOpcode == Opcode::GetBassEnhancerState)
+    {
+        std::lock_guard<std::mutex> Lock(BassEnhancerMutex);
+        return EncodeBassEnhancerStateResponse(BassEnhancerSettingsState);
     }
 
     if (InCommand.CommandOpcode == Opcode::GetHrtfCatalog)
@@ -764,6 +782,15 @@ std::vector<uint8> AudioEngine::HandleControlCommand(const Command& InCommand)
         HwEq->SetBands(HwEqBandState);
         bPersistedStateChanged = true;
     }
+    else if (InCommand.CommandOpcode == Opcode::SetBassEnhancer)
+    {
+        {
+            std::lock_guard<std::mutex> Lock(BassEnhancerMutex);
+            BassEnhancerSettingsState = InCommand.BassEnhancer;
+        }
+        BassEnhancer->SetSettings(BassEnhancerSettingsState);
+        bPersistedStateChanged = true;
+    }
     // SetHwEqPreset/SaveHwEqPreset and every Content* EQ opcode decode
     // successfully (see protocol.cpp) but have no handler yet - they're
     // Phase 2 (named presets keyed per-output-device and per-app). Falling
@@ -806,6 +833,10 @@ void AudioEngine::PersistCurrentSettings(const Status& CurrentStatus)
     {
         std::lock_guard<std::mutex> Lock(HwEqMutex);
         ToSave.HwEqBands = HwEqBandState;
+    }
+    {
+        std::lock_guard<std::mutex> Lock(BassEnhancerMutex);
+        ToSave.BassEnhancer = BassEnhancerSettingsState;
     }
     {
         std::lock_guard<std::mutex> Lock(HrtfCatalogMutex);

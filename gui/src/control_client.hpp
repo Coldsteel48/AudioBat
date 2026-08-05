@@ -56,6 +56,8 @@ public:
     std::optional<Status> SetHrtfFile(uint8 HrtfIndex);
     std::optional<Status> SetHwEqBand(uint8 BandIndex, const EqBand& Band);
     std::optional<std::array<EqBand, MaxEqBands>> RequestHwEqState();
+    std::optional<Status> SetBassEnhancer(const BassEnhancerSettings& Settings);
+    std::optional<BassEnhancerSettings> RequestBassEnhancerState();
 
 private:
     struct RawResponse

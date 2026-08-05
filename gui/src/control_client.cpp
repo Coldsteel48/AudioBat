@@ -256,4 +256,27 @@ std::optional<std::array<EqBand, MaxEqBands>> ControlClient::RequestHwEqState()
     return DecodedBands;
 }
 
+std::optional<Status> ControlClient::SetBassEnhancer(const BassEnhancerSettings& Settings)
+{
+    return SendStatusRequest(EncodeSetBassEnhancerRequest(Settings));
+}
+
+std::optional<BassEnhancerSettings> ControlClient::RequestBassEnhancerState()
+{
+    auto Response = SendRawRequest(EncodeGetBassEnhancerStateRequest());
+    if (!Response || Response->MessageOpcode != Opcode::BassEnhancerStateResponse)
+    {
+        return std::nullopt;
+    }
+
+    auto DecodedSettings = DecodeBassEnhancerStateResponse(Response->Payload.data(),
+                                                             static_cast<uint16>(Response->Payload.size()));
+    if (!DecodedSettings)
+    {
+        Disconnect();
+        return std::nullopt;
+    }
+    return DecodedSettings;
+}
+
 } // namespace ramkolfx::gui

@@ -47,6 +47,10 @@ void App::Tick(float DeltaTimeSeconds)
                     {
                         HwEqBands = *EqResult;
                     }
+                    if (auto BassResult = Client.RequestBassEnhancerState())
+                    {
+                        BassEnhancer = *BassResult;
+                    }
                     DevicePollTimerSeconds = DevicePollIntervalSeconds;
                     bConnected = true;
                 }
@@ -515,6 +519,70 @@ void App::DrawUI()
         if (i + 1 < MaxEqBands)
         {
             ImGui::SameLine();
+        }
+    }
+
+    ImGui::Spacing();
+    ImGui::TextUnformatted("Bass Enhancer");
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Psychoacoustic bass enhancement for headphones: synthesizes harmonics of "
+                           "the sub-bass so small drivers that can't reproduce it directly still make "
+                           "it audible.");
+    }
+
+    // Sends the current (already locally-updated) BassEnhancer settings
+    // and folds the response into LastStatus, same pattern as
+    // SendHwEqBand above.
+    auto SendBassEnhancer = [&]()
+    {
+        if (auto Result = Client.SetBassEnhancer(BassEnhancer))
+        {
+            LastStatus = *Result;
+        }
+        else
+        {
+            bConnected = false;
+            ReconnectTimerSeconds = 0.0f;
+        }
+    };
+
+    if (ImGui::Checkbox("Enabled##bass", &BassEnhancer.bEnabled))
+    {
+        SendBassEnhancer();
+    }
+
+    ImGui::SetNextItemWidth(180.0f * DpiScale);
+    float Amount = BassEnhancer.Mix;
+    if (ImGui::SliderFloat("Amount##bass", &Amount, 0.0f, 1.0f))
+    {
+        BassEnhancer.Mix = Amount;
+        SendBassEnhancer();
+    }
+
+    if (ImGui::Checkbox("Advanced##bass", &bAdvancedBassMode))
+    {
+        SaveGuiPreferences({.bMirrorModeEnabled = bMirrorModeEnabled,
+                             .bAdvancedEqMode = bAdvancedEqMode,
+                             .bAdvancedBassMode = bAdvancedBassMode});
+    }
+
+    if (bAdvancedBassMode)
+    {
+        ImGui::SetNextItemWidth(180.0f * DpiScale);
+        float Cutoff = BassEnhancer.CutoffHz;
+        if (ImGui::DragFloat("Cutoff Hz##bass", &Cutoff, 1.0f, 40.0f, 250.0f, "%.0f Hz"))
+        {
+            BassEnhancer.CutoffHz = Cutoff;
+            SendBassEnhancer();
+        }
+
+        ImGui::SetNextItemWidth(180.0f * DpiScale);
+        float Drive = BassEnhancer.Drive;
+        if (ImGui::DragFloat("Drive##bass", &Drive, 0.01f, 0.0f, 1.0f, "%.2f"))
+        {
+            BassEnhancer.Drive = Drive;
+            SendBassEnhancer();
         }
     }
 
