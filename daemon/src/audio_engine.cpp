@@ -9,11 +9,16 @@
 #include "audio_engine.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <csignal>
 #include <filesystem>
+
+#include <sys/inotify.h>
+#include <unistd.h>
 
 #include <pipewire/pipewire.h>
 
@@ -105,10 +110,122 @@ std::vector<HrtfCatalogEntry> AudioEngine::BuildHrtfCatalog()
         else
         {
             fprintf(stderr, "[audiobatd] HRTF catalog entry '%s' skipped, file not found: %s\n",
-                    Entry.DisplayName, Entry.Path);
+                    Entry.DisplayName.c_str(), Entry.Path.c_str());
         }
     }
     return Result;
+}
+
+std::string AudioEngine::ResolveUserHrtfDirectory()
+{
+    std::string Directory;
+    if (const char* Override = std::getenv("AUDIOBAT_HRTF_DIR"); Override && *Override)
+    {
+        Directory = Override;
+    }
+    else
+    {
+        std::string ConfigDir;
+        if (const char* XdgConfigHome = std::getenv("XDG_CONFIG_HOME"); XdgConfigHome && *XdgConfigHome)
+        {
+            ConfigDir = XdgConfigHome;
+        }
+        else if (const char* Home = std::getenv("HOME"); Home && *Home)
+        {
+            ConfigDir = std::string(Home) + "/.config";
+        }
+        else
+        {
+            ConfigDir = "/tmp"; // last resort; matches SettingsStore's own /tmp fallback
+        }
+        Directory = ConfigDir + "/audiobat/hrtf";
+    }
+
+    std::error_code Ignored;
+    std::filesystem::create_directories(Directory, Ignored);
+    return Directory;
+}
+
+std::vector<HrtfCatalogEntry> AudioEngine::ScanUserHrtfDirectory(const std::string& DirectoryPath)
+{
+    std::vector<HrtfCatalogEntry> Entries;
+    std::error_code Ignored;
+    for (const std::filesystem::directory_entry& DirEntry :
+         std::filesystem::directory_iterator(DirectoryPath, Ignored))
+    {
+        if (!DirEntry.is_regular_file(Ignored))
+        {
+            continue;
+        }
+        std::string Extension = DirEntry.path().extension().string();
+        std::transform(Extension.begin(), Extension.end(), Extension.begin(),
+                        [](unsigned char C) { return static_cast<char>(std::tolower(C)); });
+        if (Extension != ".sofa")
+        {
+            continue;
+        }
+        HrtfCatalogEntry Entry;
+        Entry.DisplayName = "(user) " + DirEntry.path().stem().string();
+        Entry.Kind = HrtfSourceKind::SofaFile;
+        Entry.Path = DirEntry.path().string();
+        Entries.push_back(std::move(Entry));
+    }
+    std::sort(Entries.begin(), Entries.end(),
+              [](const HrtfCatalogEntry& A, const HrtfCatalogEntry& B) { return A.Path < B.Path; });
+    return Entries;
+}
+
+void AudioEngine::RebuildHrtfCatalog()
+{
+    std::vector<HrtfCatalogEntry> NewCatalog = BuildHrtfCatalog();
+    std::vector<HrtfCatalogEntry> UserEntries = ScanUserHrtfDirectory(UserHrtfDirectory);
+    NewCatalog.insert(NewCatalog.end(), std::make_move_iterator(UserEntries.begin()),
+                       std::make_move_iterator(UserEntries.end()));
+
+    // HrtfIndex/ActiveHrtfIndex are a single byte on the wire (see
+    // protocol.hpp) - drop excess user entries rather than silently
+    // wrapping or corrupting an index elsewhere.
+    constexpr size_t MaxCatalogEntries = 255;
+    if (NewCatalog.size() > MaxCatalogEntries)
+    {
+        fprintf(stderr,
+                "[audiobatd] HRTF catalog has %zu entries after scanning %s, truncating to %zu "
+                "(the wire protocol's HrtfIndex is a single byte)\n",
+                NewCatalog.size(), UserHrtfDirectory.c_str(), MaxCatalogEntries);
+        NewCatalog.resize(MaxCatalogEntries);
+    }
+
+    std::lock_guard<std::mutex> Lock(HrtfCatalogMutex);
+    const uint8_t OldIndex = ActiveHrtfIndex.load(std::memory_order_relaxed);
+    if (OldIndex < RuntimeHrtfCatalog.size())
+    {
+        const std::string OldDisplayName = RuntimeHrtfCatalog[OldIndex].DisplayName;
+        for (size_t i = 0; i < NewCatalog.size(); ++i)
+        {
+            if (NewCatalog[i].DisplayName == OldDisplayName)
+            {
+                ActiveHrtfIndex.store(static_cast<uint8_t>(i), std::memory_order_relaxed);
+                break;
+            }
+        }
+    }
+    RuntimeHrtfCatalog = std::move(NewCatalog);
+}
+
+void AudioEngine::OnHrtfDirectoryChanged(void* Data, int Fd, uint32_t Mask)
+{
+    (void)Mask;
+
+    // Drain every pending event before rebuilding - inotify can coalesce
+    // many filesystem changes (e.g. `cp *.sofa dir/`) into one readiness
+    // notification, and reading only one event per call would leave the
+    // rest queued and immediately re-fire. The event contents aren't
+    // needed: any change at all just triggers a full rescan.
+    char EventBuffer[4096];
+    while (read(Fd, EventBuffer, sizeof(EventBuffer)) > 0)
+    {
+    }
+    static_cast<AudioEngine*>(Data)->RebuildHrtfCatalog();
 }
 
 int AudioEngine::Run()
@@ -173,7 +290,35 @@ int AudioEngine::Run()
         fprintf(stderr, "[audiobatd] restored settings from previous session\n");
     }
 
-    RuntimeHrtfCatalog = BuildHrtfCatalog();
+    // Directory the daemon watches for user-supplied SOFA files - unlike
+    // the bundled catalog, this isn't rebuilt on a timer: the inotify
+    // watch set up below rebuilds it the moment a file is added or
+    // removed, so a running daemon never needs restarting to pick up new
+    // files (see ScanUserHrtfDirectory's doc comment).
+    UserHrtfDirectory = ResolveUserHrtfDirectory();
+    RebuildHrtfCatalog();
+
+    const int HrtfDirWatchFd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+    if (HrtfDirWatchFd < 0)
+    {
+        fprintf(stderr, "[audiobatd] inotify_init1 failed: %s (user HRTF directory won't auto-refresh)\n",
+                strerror(errno));
+    }
+    else if (inotify_add_watch(HrtfDirWatchFd, UserHrtfDirectory.c_str(),
+                                IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE) < 0)
+    {
+        fprintf(stderr, "[audiobatd] failed to watch HRTF directory %s: %s (won't auto-refresh)\n",
+                UserHrtfDirectory.c_str(), strerror(errno));
+        close(HrtfDirWatchFd);
+    }
+    else
+    {
+        // close=true: PipeWire owns closing this fd when the loop (and
+        // therefore this source) is torn down in Teardown(), so no
+        // matching cleanup is needed there - same as the pw_loop_add_signal
+        // sources registered above needing no explicit removal.
+        pw_loop_add_io(Loop, HrtfDirWatchFd, SPA_IO_IN, true, &AudioEngine::OnHrtfDirectoryChanged, this);
+    }
 
     // ResolveHrtfSofaPath() (AUDIOBAT_HRTF_SOFA or the bundled default)
     // picks the initial HRTF source unless a persisted choice overrides it
@@ -446,10 +591,13 @@ std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
     if (InCommand.CommandOpcode == Opcode::GetHrtfCatalog)
     {
         std::vector<std::string> DisplayNames;
-        DisplayNames.reserve(RuntimeHrtfCatalog.size());
-        for (const HrtfCatalogEntry& Entry : RuntimeHrtfCatalog)
         {
-            DisplayNames.emplace_back(Entry.DisplayName);
+            std::lock_guard<std::mutex> Lock(HrtfCatalogMutex);
+            DisplayNames.reserve(RuntimeHrtfCatalog.size());
+            for (const HrtfCatalogEntry& Entry : RuntimeHrtfCatalog)
+            {
+                DisplayNames.emplace_back(Entry.DisplayName);
+            }
         }
         return EncodeHrtfCatalogResponse(DisplayNames);
     }
@@ -527,19 +675,34 @@ std::vector<uint8_t> AudioEngine::HandleControlCommand(const Command& InCommand)
     {
         // DecodeCommand only checked the payload shape, not that the index
         // is actually in range for this daemon's catalog - bounds-check
-        // here before indexing.
-        if (InCommand.HrtfIndex < RuntimeHrtfCatalog.size())
+        // here before indexing. Copy the selected entry out while holding
+        // the lock, then release it before calling SwitchTo() below: SOFA
+        // parsing there can take a noticeable moment (see HrtfDeck's own
+        // doc comment), and there's no reason to block a concurrent
+        // OnHrtfDirectoryChanged rebuild for that long.
+        bool bIndexValid = false;
+        HrtfCatalogEntry SelectedEntry;
+        size_t CatalogSize = 0;
         {
-            const HrtfCatalogEntry& Entry = RuntimeHrtfCatalog[InCommand.HrtfIndex];
-            AdvancedStage->SwitchTo(Entry.Kind, Entry.Path);
+            std::lock_guard<std::mutex> Lock(HrtfCatalogMutex);
+            CatalogSize = RuntimeHrtfCatalog.size();
+            bIndexValid = InCommand.HrtfIndex < CatalogSize;
+            if (bIndexValid)
+            {
+                SelectedEntry = RuntimeHrtfCatalog[InCommand.HrtfIndex];
+            }
+        }
+        if (bIndexValid)
+        {
+            AdvancedStage->SwitchTo(SelectedEntry.Kind, SelectedEntry.Path);
             ActiveHrtfIndex.store(InCommand.HrtfIndex, std::memory_order_relaxed);
             bPersistedStateChanged = true;
-            fprintf(stderr, "[audiobatd] HRTF source switched to '%s'\n", Entry.DisplayName);
+            fprintf(stderr, "[audiobatd] HRTF source switched to '%s'\n", SelectedEntry.DisplayName.c_str());
         }
         else
         {
             fprintf(stderr, "[audiobatd] SetHrtfFile: index %u out of range (catalog has %zu entries)\n",
-                    InCommand.HrtfIndex, RuntimeHrtfCatalog.size());
+                    InCommand.HrtfIndex, CatalogSize);
         }
     }
 
@@ -576,9 +739,12 @@ void AudioEngine::PersistCurrentSettings(const Status& CurrentStatus)
     ToSave.SpeakerMuted = CurrentStatus.SpeakerMuted;
     ToSave.bNearFieldEnabled = CurrentStatus.bNearFieldEnabled;
     ToSave.OutputDeviceName = CurrentStatus.OutputDeviceName;
-    if (CurrentStatus.ActiveHrtfIndex < RuntimeHrtfCatalog.size())
     {
-        ToSave.ActiveHrtfDisplayName = RuntimeHrtfCatalog[CurrentStatus.ActiveHrtfIndex].DisplayName;
+        std::lock_guard<std::mutex> Lock(HrtfCatalogMutex);
+        if (CurrentStatus.ActiveHrtfIndex < RuntimeHrtfCatalog.size())
+        {
+            ToSave.ActiveHrtfDisplayName = RuntimeHrtfCatalog[CurrentStatus.ActiveHrtfIndex].DisplayName;
+        }
     }
     Settings.Save(ToSave);
 }

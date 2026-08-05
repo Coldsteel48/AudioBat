@@ -46,9 +46,18 @@ namespace audiobat::gui
 // handle size, line thickness, label offsets) - the widget is entirely
 // custom ImDrawList calls, so it doesn't pick up DPI scaling from ImGui's
 // style/font the way regular widgets do.
+//
+// When bMirrorEnabled is true, dragging a speaker that has a left/right
+// counterpart (FL<->FR, RL<->RR, SL<->SR) also moves that counterpart to
+// the mirrored azimuth (negated) at the same distance; FC has no
+// counterpart and is unaffected. *OutMirroredIndex is set to that
+// counterpart's index when this happens this frame, -1 otherwise - the
+// caller should send its updated azimuth/distance to the daemon the same
+// way it does for *OutChangedIndex.
 bool DrawPositionDial(const char* Label, std::array<float, SpeakerCount>& AzimuthsDegrees,
                       std::array<float, SpeakerCount>& DistancesMeters,
-                      const std::array<bool, SpeakerCount>& Muted, int* OutChangedIndex,
-                      int* OutMuteToggledIndex, int* OutSoloIndex, float Scale = 1.0f);
+                      const std::array<bool, SpeakerCount>& Muted, bool bMirrorEnabled,
+                      int* OutChangedIndex, int* OutMirroredIndex, int* OutMuteToggledIndex,
+                      int* OutSoloIndex, float Scale = 1.0f);
 
 } // namespace audiobat::gui

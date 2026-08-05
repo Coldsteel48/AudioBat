@@ -43,9 +43,15 @@ three genuinely different signal paths (`SpatialMode`: `Off` / `Basic` /
   8 individual subjects from the SADIE II database (Apache-2.0, safe to
   redistribute commercially — the CIPIC/ARI/Listen mirrors were
   deliberately avoided for exactly that reason), and the synthetic model.
-  The `AUDIOBAT_HRTF_SOFA` environment variable still works as a
-  lower-level override for the daemon's *initial* source, outside the
-  catalog entirely.
+  The daemon also watches a user-writable directory
+  (`$XDG_CONFIG_HOME/audiobat/hrtf` by default, or `AUDIOBAT_HRTF_DIR`)
+  and appends any `.sofa` files found there to the catalog, prefixed
+  `(user) `, picking up additions/removals live via inotify — unlike the
+  bundled entries, files placed there are never redistributed or license-
+  checked by AudioBat, so it's the place for datasets with terms that
+  don't allow redistribution. The `AUDIOBAT_HRTF_SOFA` environment
+  variable still works as a lower-level override for the daemon's
+  *initial* source, outside the catalog entirely.
 
 All three modes sit behind the same `DspStage` interface and share one
 live-repositionable `SpeakerLayout`, so speaker position changes apply
@@ -127,7 +133,10 @@ Socket path: `$XDG_RUNTIME_DIR/audiobat/control.sock` (falls back to
 
 ### Dependencies
 
-- CMake >= 3.20, a C++20 compiler (GCC or Clang), Ninja (or Make)
+**Daemon (`audiobatd`):**
+
+- CMake >= 3.20, a C++20 compiler (GCC or Clang), Ninja (or Make),
+  `pkg-config`
 - PipeWire development headers: `libpipewire-0.3` (via pkg-config)
 - zlib development headers (libmysofa's SOFA/HDF5 parsing depends on it)
 - pthreads (part of the standard toolchain on Linux)
@@ -136,20 +145,52 @@ Socket path: `$XDG_RUNTIME_DIR/audiobat/control.sock` (falls back to
   `gui/CMakeLists.txt` already uses for Dear ImGui) since neither ships as
   a common distro package.
 
+**GUI (`audiobat-gui`, only needed with `-DAUDIOBAT_BUILD_GUI=ON`):**
+
+- SDL2 development headers: `sdl2` (via pkg-config)
+- OpenGL development headers/libs
+- Network access on first configure: `gui/CMakeLists.txt` fetches Dear
+  ImGui via CMake `FetchContent`.
+
 On this machine, everything above is already present (GCC 16, Clang 22,
 CMake 4.4, Ninja 1.13, libpipewire-0.3 1.6.7). On a fresh machine, install
-your distro's PipeWire development package, e.g. `pipewire-devel` /
-`libpipewire-0.3-dev` / `libpipewire-0.3-devel` depending on distro, plus
-`zlib1g-dev` / `zlib-devel` depending on distro.
+your distro's packages, e.g.:
+
+- Debian/Ubuntu: `sudo apt install build-essential cmake ninja-build pkg-config libpipewire-0.3-dev zlib1g-dev libsdl2-dev libgl1-mesa-dev`
+- Fedora: `sudo dnf install gcc-c++ cmake ninja-build pkgconf-pkg-config pipewire-devel zlib-devel SDL2-devel mesa-libGL-devel`
+- Arch: `sudo pacman -S base-devel cmake ninja pkgconf libpipewire zlib sdl2 mesa`
 
 ### Build
 
 ```sh
-cmake -S . -B build -G Ninja
+cmake -S . -B build -G Ninja -DAUDIOBAT_BUILD_GUI=ON
 cmake --build build
 ```
 
-The daemon binary is `build/daemon/audiobatd`.
+(Omit `-DAUDIOBAT_BUILD_GUI=ON` to build only the daemon, skipping the GUI
+dependencies above.) Or just run `./build.sh`, which does the same thing
+and builds both.
+
+The daemon binary is `build/daemon/audiobatd`; the GUI binary (if built)
+is `build/gui/audiobat-gui`.
+
+### Convenience scripts
+
+- **`./build.sh`** — configures and builds daemon + GUI into `build/`
+  (same as the `cmake` invocation above). `./build.sh clean` wipes `build/`
+  first.
+- **`./run.sh`** — starts `audiobatd` in the background, waits for its
+  control socket to come up, then launches `audiobat-gui` in the
+  foreground; stops the daemon when the GUI exits or on Ctrl+C.
+  `./run.sh daemon` runs only the daemon (foreground); `./run.sh gui` runs
+  only the GUI, assuming a daemon is already running.
+- **`./run_gui.sh`** — launches `audiobat-gui` on its own, assuming a
+  daemon is already running and listening on the control socket. This is
+  what `run.sh` calls internally for the GUI half.
+
+All three build/run against the same `build/` directory and must be run
+from the repo root (they `cd` to their own location first, so `./run.sh`
+works from anywhere).
 
 ## Running
 

@@ -61,10 +61,30 @@ weaker front/back cues), but always available regardless of what's on
 disk, and a genuinely license-free option for anyone redistributing
 AudioBat who wants to avoid bundling third-party data entirely.
 
+## Bringing your own SOFA files
+
+Beyond the vetted, redistributable datasets above, the daemon also watches
+a user-writable directory and lists whatever `.sofa` files it finds there
+in the GUI's HRTF dropdown, prefixed `(user) ` — no rebuild or restart
+needed. **AudioBat doesn't bundle, vet, or check the license of anything
+placed here — that's entirely on you.** This is the place to put a SOFA
+dataset with terms that don't allow redistribution (e.g. CIPIC, ARI,
+Listen, or any "research only" dataset), or one of your own individual
+HRIR measurements.
+
+By default this is `$XDG_CONFIG_HOME/audiobat/hrtf`, falling back to
+`~/.config/audiobat/hrtf` (created automatically on first run). Set
+`AUDIOBAT_HRTF_DIR` to point the daemon at a different directory instead.
+Files are matched purely by `.sofa` extension (case-insensitive) and
+aren't parsed until selected — a corrupt or non-SOFA file will show up in
+the list but fail gracefully (falling back to silence for that source)
+rather than crashing the daemon when selected.
+
 ## Overriding at runtime
 
 `AUDIOBAT_HRTF_SOFA` (environment variable) still works as a lower-level
 override, pointing `BinauralStage` at any arbitrary SOFA file path outside
-this catalog — useful for trying a dataset that isn't bundled without
-rebuilding. The GUI catalog dropdown is the normal way to switch between
-the datasets described above.
+the catalog entirely (including outside the user directory above) —
+useful for trying a single dataset without adding it to the catalog. The
+GUI catalog dropdown is the normal way to switch between the bundled
+datasets and anything placed in the user directory.

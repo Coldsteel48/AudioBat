@@ -49,6 +49,12 @@ private:
     // DrawUI().
     bool bPositionSendPending = false;
     int PendingPositionIndex = -1;
+    int PendingMirroredIndex = -1;
+
+    // Local-only UX toggle (never sent to the daemon): when on, dragging a
+    // left/right speaker also drags its mirrored counterpart - see
+    // DrawPositionDial's bMirrorEnabled.
+    bool bMirrorModeEnabled = false;
 };
 
 } // namespace audiobat::gui

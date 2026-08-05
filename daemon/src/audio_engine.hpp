@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -116,6 +117,39 @@ private:
     // populated). Runs once at startup.
     static std::vector<HrtfCatalogEntry> BuildHrtfCatalog();
 
+    // Resolves the directory the daemon watches for user-supplied SOFA
+    // files: AUDIOBAT_HRTF_DIR if set, else $XDG_CONFIG_HOME/audiobat/hrtf
+    // (falling back to ~/.config/audiobat/hrtf, mirroring SettingsStore's
+    // own XDG resolution), created if it doesn't exist yet. Unlike the
+    // bundled catalog, files placed here are never vetted for license or
+    // validity - see data/hrtf/README.md.
+    static std::string ResolveUserHrtfDirectory();
+
+    // Scans DirectoryPath for *.sofa files (case-insensitive extension),
+    // sorted alphabetically by path. Only checks that each file exists and
+    // has the right extension, same as BuildHrtfCatalog's own bundled-file
+    // check - actual SOFA parsing happens lazily in HrtfLoader::Open when
+    // an entry is selected, and fails gracefully on a corrupt file.
+    static std::vector<HrtfCatalogEntry> ScanUserHrtfDirectory(const std::string& DirectoryPath);
+
+    // Rebuilds RuntimeHrtfCatalog from BuildHrtfCatalog() plus a fresh
+    // ScanUserHrtfDirectory(UserHrtfDirectory), under HrtfCatalogMutex.
+    // Called once at startup and again from OnHrtfDirectoryChanged
+    // whenever the user directory's contents change. If the currently
+    // active entry shifted index (or disappeared) since the last build,
+    // re-locates it by display name so ActiveHrtfIndex doesn't silently
+    // end up pointing at a different entry than what's actually loaded -
+    // same reasoning as PersistedSettings::ActiveHrtfDisplayName.
+    void RebuildHrtfCatalog();
+
+    // inotify readiness callback for UserHrtfDirectory, hooked into the
+    // PipeWire main loop via pw_loop_add_io in Run() (the same facility
+    // Run() already uses for SIGINT/SIGTERM) rather than polling on a
+    // timer, so new/removed files are picked up immediately. Runs on the
+    // PipeWire main loop thread - see HrtfCatalogMutex's doc comment for
+    // why that matters.
+    static void OnHrtfDirectoryChanged(void* Data, int Fd, uint32_t Mask);
+
     bool bPipeWireInitialized = false;
     pw_main_loop* MainLoop = nullptr;
     pw_loop* Loop = nullptr;
@@ -148,13 +182,23 @@ private:
     std::unique_ptr<AmbisonicsStage> BasicStage;
     std::unique_ptr<HrtfDeck> AdvancedStage;
 
-    // Result of BuildHrtfCatalog(), fixed for the process lifetime; index
-    // into this is what the GetHrtfCatalog/SetHrtfFile/Status wire values
-    // mean. Entries point at static-duration strings from the generated
-    // HrtfCatalog, so copying HrtfCatalogEntry by value here is cheap and
-    // safe.
+    // Bundled catalog (BuildHrtfCatalog()) plus whatever's currently in
+    // UserHrtfDirectory; index into this is what the GetHrtfCatalog/
+    // SetHrtfFile/Status wire values mean. No longer fixed for the process
+    // lifetime - RebuildHrtfCatalog() replaces it whenever the user
+    // directory changes, from the PipeWire main loop thread
+    // (OnHrtfDirectoryChanged), while HandleControlCommand reads/writes it
+    // from per-connection control threads (ControlServer::HandleClient) -
+    // HrtfCatalogMutex guards every access from either side. Neither side
+    // is the realtime audio callback, so a plain mutex (rather than
+    // HrtfDeck's lock-free Slot/Publish pattern) is fine here.
+    std::mutex HrtfCatalogMutex;
     std::vector<HrtfCatalogEntry> RuntimeHrtfCatalog;
     std::atomic<uint8_t> ActiveHrtfIndex{0};
+
+    // Resolved once in Run() by ResolveUserHrtfDirectory(); re-scanned by
+    // RebuildHrtfCatalog() on every OnHrtfDirectoryChanged callback.
+    std::string UserHrtfDirectory;
 
     // Holds processed (post-DSP) interleaved stereo samples awaiting
     // playback. Sized generously relative to a typical PipeWire quantum.

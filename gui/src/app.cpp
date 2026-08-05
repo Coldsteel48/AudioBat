@@ -243,6 +243,13 @@ void App::DrawUI()
     ImGui::Spacing();
     ImGui::TextUnformatted(
         "Speaker positions (drag: angle + distance; click a label to mute, Ctrl+click to solo)");
+    ImGui::Checkbox("Mirror left/right", &bMirrorModeEnabled);
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("When on, dragging FL/FR, RL/RR, or SL/SR also drags its counterpart to the "
+                           "mirrored angle at the same distance.\nOff: every speaker moves independently. FC "
+                           "has no counterpart either way.");
+    }
 
     // Sends one mute/unmute command and folds the response into LastStatus;
     // on failure, flags disconnected the same way every other request
@@ -261,18 +268,18 @@ void App::DrawUI()
         return false;
     };
 
-    // Sends the given speaker's current (locally-dragged) azimuth and
-    // distance and folds the response into LastStatus, the same
-    // fail-and-disconnect pattern as SetSpeakerMuted above.
-    auto SendSpeakerPosition = [&](uint8_t SpeakerIndex)
+    // Sends one speaker's given (already-captured) azimuth and distance and
+    // folds the response into LastStatus, the same fail-and-disconnect
+    // pattern as SetSpeakerMuted above. Takes the values as parameters
+    // rather than reading them from LastStatus itself: the azimuth
+    // round-trip's LastStatus assignment overwrites every field, including
+    // other speakers', with whatever the daemon had *before* this call, so
+    // a caller sending more than one speaker's position (e.g. a mirrored
+    // pair) must capture both speakers' target values up front rather than
+    // reading them fresh between calls.
+    auto SendSpeakerPositionValues = [&](uint8_t SpeakerIndex, float AzimuthDegrees, float DistanceMeters)
     {
-        // Captured before the azimuth round-trip: that response's
-        // LastStatus assignment below overwrites SpeakerDistanceMeters
-        // with whatever the daemon had *before* this drag's distance is
-        // sent, so reading it fresh afterward would send the stale
-        // pre-drag distance right back to the daemon.
-        const float DistanceToSend = LastStatus.SpeakerDistanceMeters[SpeakerIndex];
-        if (auto Result = Client.SetSpeakerAzimuth(SpeakerIndex, LastStatus.SpeakerAzimuthDegrees[SpeakerIndex]))
+        if (auto Result = Client.SetSpeakerAzimuth(SpeakerIndex, AzimuthDegrees))
         {
             LastStatus = *Result;
         }
@@ -283,7 +290,7 @@ void App::DrawUI()
         }
         if (bConnected)
         {
-            if (auto Result = Client.SetSpeakerDistance(SpeakerIndex, DistanceToSend))
+            if (auto Result = Client.SetSpeakerDistance(SpeakerIndex, DistanceMeters))
             {
                 LastStatus = *Result;
             }
@@ -295,21 +302,46 @@ void App::DrawUI()
         }
     };
 
+    // Sends PrimaryIndex's current (locally-dragged) position, and
+    // MirrorIndex's too if it's >= 0 (mirror mode dragged a counterpart
+    // alongside it). Both speakers' target values are captured before
+    // either round-trip starts, for the reason described above.
+    auto SendSpeakerPosition = [&](int PrimaryIndex, int MirrorIndex)
+    {
+        const float PrimaryAzimuth = LastStatus.SpeakerAzimuthDegrees[static_cast<size_t>(PrimaryIndex)];
+        const float PrimaryDistance = LastStatus.SpeakerDistanceMeters[static_cast<size_t>(PrimaryIndex)];
+        float MirrorAzimuth = 0.0f;
+        float MirrorDistance = 0.0f;
+        if (MirrorIndex >= 0)
+        {
+            MirrorAzimuth = LastStatus.SpeakerAzimuthDegrees[static_cast<size_t>(MirrorIndex)];
+            MirrorDistance = LastStatus.SpeakerDistanceMeters[static_cast<size_t>(MirrorIndex)];
+        }
+        SendSpeakerPositionValues(static_cast<uint8_t>(PrimaryIndex), PrimaryAzimuth, PrimaryDistance);
+        if (MirrorIndex >= 0 && bConnected)
+        {
+            SendSpeakerPositionValues(static_cast<uint8_t>(MirrorIndex), MirrorAzimuth, MirrorDistance);
+        }
+    };
+
     int ChangedIndex = -1;
+    int MirroredIndex = -1;
     int MuteToggledIndex = -1;
     int SoloIndex = -1;
     const bool bDialChanged =
         DrawPositionDial("speaker_dial", LastStatus.SpeakerAzimuthDegrees, LastStatus.SpeakerDistanceMeters,
-                          LastStatus.SpeakerMuted, &ChangedIndex, &MuteToggledIndex, &SoloIndex, DpiScale);
+                          LastStatus.SpeakerMuted, bMirrorModeEnabled, &ChangedIndex, &MirroredIndex,
+                          &MuteToggledIndex, &SoloIndex, DpiScale);
 
     if (bDialChanged)
     {
         PendingPositionIndex = ChangedIndex;
+        PendingMirroredIndex = MirroredIndex;
         PositionSendTimerSeconds -= ImGui::GetIO().DeltaTime;
         if (PositionSendTimerSeconds <= 0.0f)
         {
             PositionSendTimerSeconds = PositionSendIntervalSeconds;
-            SendSpeakerPosition(static_cast<uint8_t>(ChangedIndex));
+            SendSpeakerPosition(ChangedIndex, MirroredIndex);
             bPositionSendPending = false;
         }
         else
@@ -327,10 +359,11 @@ void App::DrawUI()
         // snaps the handle back to it.
         if (bPositionSendPending && PendingPositionIndex >= 0)
         {
-            SendSpeakerPosition(static_cast<uint8_t>(PendingPositionIndex));
+            SendSpeakerPosition(PendingPositionIndex, PendingMirroredIndex);
             bPositionSendPending = false;
         }
         PendingPositionIndex = -1;
+        PendingMirroredIndex = -1;
     }
 
     if (MuteToggledIndex >= 0)

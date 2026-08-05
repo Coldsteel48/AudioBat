@@ -23,6 +23,11 @@ constexpr float HandleRadius = 9.0f;
 constexpr float Pi = 3.14159265358979323846f;
 constexpr const char* SpeakerLabels[SpeakerCount] = {"FL", "FR", "FC", "RL", "RR", "SL", "SR"};
 
+// Left/right counterpart of each speaker, by index into AzimuthsDegrees /
+// DistancesMeters (matching SpeakerLabels' order FL,FR,FC,RL,RR,SL,SR); -1
+// for FC, which has no counterpart.
+constexpr int MirrorPartnerIndex[SpeakerCount] = {1, 0, -1, 4, 3, 6, 5};
+
 // The closest distance (MinSpeakerDistanceMeters) maps to this fraction of
 // the dial's outer radius rather than to the exact center - keeps handles
 // clickable/draggable even at minimum distance and keeps azimuth (which is
@@ -77,10 +82,12 @@ float PixelRadiusToDistance(float RadiusPx, float InnerRadiusPx, float OuterRadi
 
 bool DrawPositionDial(const char* Label, std::array<float, SpeakerCount>& AzimuthsDegrees,
                       std::array<float, SpeakerCount>& DistancesMeters,
-                      const std::array<bool, SpeakerCount>& Muted, int* OutChangedIndex,
-                      int* OutMuteToggledIndex, int* OutSoloIndex, float Scale)
+                      const std::array<bool, SpeakerCount>& Muted, bool bMirrorEnabled,
+                      int* OutChangedIndex, int* OutMirroredIndex, int* OutMuteToggledIndex,
+                      int* OutSoloIndex, float Scale)
 {
     *OutChangedIndex = -1;
+    *OutMirroredIndex = -1;
     *OutMuteToggledIndex = -1;
     *OutSoloIndex = -1;
 
@@ -129,6 +136,14 @@ bool DrawPositionDial(const char* Label, std::array<float, SpeakerCount>& Azimut
             DistancesMeters[i] = PixelRadiusToDistance(DragPixelRadius, InnerRadiusPx, OuterRadiusPx);
             bChanged = true;
             *OutChangedIndex = static_cast<int>(i);
+
+            const int MirrorIndex = MirrorPartnerIndex[i];
+            if (bMirrorEnabled && MirrorIndex >= 0)
+            {
+                AzimuthsDegrees[static_cast<size_t>(MirrorIndex)] = -AzimuthsDegrees[i];
+                DistancesMeters[static_cast<size_t>(MirrorIndex)] = DistancesMeters[i];
+                *OutMirroredIndex = MirrorIndex;
+            }
         }
 
         const bool bIsMuted = Muted[i];

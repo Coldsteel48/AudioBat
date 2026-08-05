@@ -6,16 +6,21 @@
 // (see LICENSE-COMMERCIAL.md). Contributions are accepted only under the
 // terms of the Contributor License Agreement (see CLA.md).
 
-// CMake-generated: the full set of HRTF sources Advanced spatial mode can
-// switch between (see data/hrtf/README.md for what each one is and its
+// CMake-generated: the bundled set of HRTF sources Advanced spatial mode
+// can switch between (see data/hrtf/README.md for what each one is and its
 // license). AudioEngine filters this down at startup to entries that are
 // actually usable (SyntheticSphericalHead always is; SofaFile entries
 // need their file to exist on disk) before exposing it over the control
-// protocol - see AudioEngine::BuildHrtfCatalog.
+// protocol - see AudioEngine::BuildHrtfCatalog. AudioEngine also appends
+// entries scanned from the user's own SOFA directory at runtime (see
+// AudioEngine::ScanUserHrtfDirectory), which is why HrtfCatalogEntry's
+// fields are std::string rather than string literals - unlike this
+// compile-time list, those entries don't have static storage duration.
 
 #pragma once
 
 #include <cstddef>
+#include <string>
 
 #include "dsp/binaural_stage.hpp"
 
@@ -24,12 +29,15 @@ namespace audiobat
 
 struct HrtfCatalogEntry
 {
-    const char* DisplayName;
+    std::string DisplayName;
     HrtfSourceKind Kind;
-    const char* Path; // empty for SyntheticSphericalHead, which has no file
+    std::string Path; // empty for SyntheticSphericalHead, which has no file
 };
 
-inline constexpr HrtfCatalogEntry HrtfCatalog[] = {
+// Not constexpr: std::string members with content beyond the small-string
+// buffer (e.g. the absolute paths below) can't be constant-initialized in
+// a static-duration array under C++20's non-transient allocation rules.
+inline const HrtfCatalogEntry HrtfCatalog[] = {
 @AUDIOBAT_HRTF_CATALOG_ENTRIES@
 };
 
