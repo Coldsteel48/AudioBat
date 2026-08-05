@@ -153,12 +153,15 @@ Socket path: `$XDG_RUNTIME_DIR/audiobat/control.sock` (falls back to
   ImGui via CMake `FetchContent`.
 
 On this machine, everything above is already present (GCC 16, Clang 22,
-CMake 4.4, Ninja 1.13, libpipewire-0.3 1.6.7). On a fresh machine, install
-your distro's packages, e.g.:
+CMake 4.4, Ninja 1.13, libpipewire-0.3 1.6.7). On a fresh machine, run
+`./FetchDependencies.sh` to install your distro's packages automatically
+(Debian/Ubuntu, Fedora, Arch, and openSUSE are detected via
+`/etc/os-release`; pass `--no-gui` to skip the GUI-only packages). That
+script's install commands, spelled out:
 
-- Debian/Ubuntu: `sudo apt install build-essential cmake ninja-build pkg-config libpipewire-0.3-dev zlib1g-dev libsdl2-dev libgl1-mesa-dev`
-- Fedora: `sudo dnf install gcc-c++ cmake ninja-build pkgconf-pkg-config pipewire-devel zlib-devel SDL2-devel mesa-libGL-devel`
-- Arch: `sudo pacman -S base-devel cmake ninja pkgconf libpipewire zlib sdl2 mesa`
+- Debian/Ubuntu: `sudo apt install build-essential cmake ninja-build pkg-config git libpipewire-0.3-dev zlib1g-dev libsdl2-dev libgl1-mesa-dev`
+- Fedora: `sudo dnf install gcc-c++ cmake ninja-build pkgconf-pkg-config git pipewire-devel zlib-devel SDL2-devel mesa-libGL-devel`
+- Arch: `sudo pacman -S base-devel cmake ninja pkgconf git libpipewire zlib sdl2 mesa`
 
 ### Build
 
@@ -176,6 +179,9 @@ is `build/gui/audiobat-gui`.
 
 ### Convenience scripts
 
+- **`./FetchDependencies.sh`** — installs the OS packages listed above for
+  your distro. `./FetchDependencies.sh --no-gui` skips the GUI-only
+  packages; `--dry-run` prints the install command without running it.
 - **`./build.sh`** — configures and builds daemon + GUI into `build/`
   (same as the `cmake` invocation above). `./build.sh clean` wipes `build/`
   first.
@@ -232,6 +238,29 @@ printf '\x01\x00\x00\x02\x00\x01\x02' | \
 `2` = Advanced (HRTF binaural). Each reply is `[0x81][len=29][SpatialMode
 byte][7 x speaker azimuth: f32 BE]` (status) or `[0x82][len][message]`
 (error).
+
+## Adding your own SOFA files
+
+Beyond the bundled catalog (MIT KEMAR + 8 SADIE II subjects + the
+synthetic model, see `data/hrtf/README.md`), you can add your own HRTF
+measurements — CIPIC, ARI, Listen, or your own — without rebuilding:
+
+1. Drop the `.sofa` file into `$XDG_CONFIG_HOME/audiobat/hrtf` (falls
+   back to `~/.config/audiobat/hrtf`, created automatically on first
+   run), or point `AUDIOBAT_HRTF_DIR` at a directory of your choice.
+2. That's it — the daemon watches the directory via inotify and adds it
+   to the HRTF catalog live, prefixed `(user) `, no restart needed. It'll
+   show up in the GUI's HRTF dropdown (or is selectable via the
+   `SetHrtfFile` control opcode) alongside the bundled entries.
+
+Matching is purely by `.sofa` extension (case-insensitive); files aren't
+parsed until selected, so a corrupt or non-SOFA file just fails
+gracefully back to silence for that entry rather than crashing the
+daemon. AudioBat doesn't vet or redistribute anything placed here, so
+it's the right place for datasets whose license doesn't allow
+redistribution. See `data/hrtf/README.md` for the full details and for
+`AUDIOBAT_HRTF_SOFA`, the lower-level env var override for a one-off
+file outside the catalog entirely.
 
 ## Roadmap
 
