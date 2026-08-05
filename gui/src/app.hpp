@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <array>
 #include <vector>
 
 #include "ramkolfx/protocol.hpp"
@@ -22,7 +23,9 @@ namespace ramkolfx::gui
 class App
 {
 public:
-    explicit App(float InDpiScale) : DpiScale(InDpiScale), bMirrorModeEnabled(LoadGuiPreferences().bMirrorModeEnabled)
+    explicit App(float InDpiScale)
+        : DpiScale(InDpiScale), bMirrorModeEnabled(LoadGuiPreferences().bMirrorModeEnabled),
+          bAdvancedEqMode(LoadGuiPreferences().bAdvancedEqMode)
     {
     }
 
@@ -57,6 +60,21 @@ private:
     // DrawPositionDial's bMirrorEnabled. Persisted separately via
     // gui_prefs.hpp since it never touches the daemon's SettingsStore.
     bool bMirrorModeEnabled = false;
+
+    // Local cache of the current 10-band HW EQ curve - fetched once on
+    // connect/reconnect via RequestHwEqState() and kept in sync
+    // optimistically as the user drags sliders (Status deliberately
+    // doesn't carry EQ state - see protocol.hpp's HwEqStateResponse).
+    // Default-constructed EqBands (all at EqBand's own 1kHz/0dB default)
+    // until the first successful RequestHwEqState() overwrites them - the
+    // panel is disabled (see ImGui::BeginDisabled(!bConnected) in DrawUI)
+    // until then anyway, so the placeholder is never actually shown.
+    std::array<EqBand, MaxEqBands> HwEqBands{};
+
+    // Whether the EQ panel shows per-band frequency/Q/filter-type controls
+    // - local-only UX toggle, persisted via gui_prefs.hpp same as
+    // bMirrorModeEnabled.
+    bool bAdvancedEqMode = false;
 };
 
 } // namespace ramkolfx::gui

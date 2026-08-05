@@ -48,11 +48,23 @@ enum class Opcode : uint8
     SetHrtfFile = 0x0A,
     SetSpeakerDistance = 0x0B,
     SetNearFieldEnabled = 0x0C,
+    SetHwEqBand = 0x0D,
+    SetHwEqPreset = 0x0E,
+    SaveHwEqPreset = 0x0F,
+    GetContentStreams = 0x10,
+    SetContentEqBand = 0x11,
+    SetContentEqPreset = 0x12,
+    SaveContentEqPreset = 0x13,
+    GetEqPresetCatalog = 0x14,
+    GetHwEqState = 0x15,
     // Responses
     StatusResponse = 0x81,
     ErrorResponse = 0x82,
     DeviceListResponse = 0x83,
     HrtfCatalogResponse = 0x84,
+    ContentStreamListResponse = 0x85,
+    EqPresetCatalogResponse = 0x86,
+    HwEqStateResponse = 0x87,
 };
 
 // The active spatialization DSP path. Off is a static-gain downmix
@@ -66,6 +78,57 @@ enum class SpatialMode : uint8
     Basic = 1,
     Advanced = 2,
 };
+
+// The hardware-output EQ (SetHwEqBand/GetHwEqState) is a single global
+// stereo curve applied once to the final downmixed signal, right before
+// HardwareOutput - not a curve per virtual 7.1 speaker channel. This was a
+// deliberate choice: it matches how graphic EQs are normally used, costs
+// one filter chain instead of eight, and lines up with the planned
+// per-output-device preset system (presets are keyed by which real sink is
+// active, not by speaker channel). Per-channel EQ (pre-downmix, on the 7.1
+// signal) remains possible later without breaking this wire format - it
+// would just mean reintroducing a channel-select byte to SetHwEqBand/
+// SetHwEqPreset/SaveHwEqPreset the same way SpeakerIndex used to work for
+// them, orthogonal to everything else here.
+//
+// A single parametric EQ band. Wire layout is fixed 13 bytes:
+// [filterType:1][frequencyHz:4][gainDb:4][q:4], all floats big-endian.
+enum class EqFilterType : uint8
+{
+    Peaking = 0,
+    LowShelf = 1,
+    HighShelf = 2,
+    LowPass = 3,
+    HighPass = 4,
+    Notch = 5,
+};
+
+struct EqBand
+{
+    EqFilterType FilterType = EqFilterType::Peaking;
+    float FrequencyHz = 1000.0f;
+    float GainDb = 0.0f;
+    float Q = 0.707f;
+};
+
+// Wire size of one EqBand: filterType(1) + frequencyHz(4) + gainDb(4) + q(4).
+inline constexpr size_t EqBandWireSize = 13;
+
+// Upper bound on bands per curve (HW or content), shared by daemon and GUI
+// so both agree on BandIndex's valid range for SetHwEqBand/SetContentEqBand.
+inline constexpr size_t MaxEqBands = 10;
+
+// ISO 10-band graphic EQ center frequencies (31.5Hz-16kHz, ~1 octave
+// apart). Shared between the daemon (DefaultHwEqBands(), dsp/
+// graphic_eq_filter.hpp) and the GUI (simple-mode slider labels), so both
+// sides agree on what each band index nominally means regardless of
+// whether its actual FrequencyHz has since been retuned in advanced mode.
+inline constexpr std::array<float, MaxEqBands> DefaultEqCenterFrequenciesHz = {
+    31.5f, 63.0f, 125.0f, 250.0f, 500.0f, 1000.0f, 2000.0f, 4000.0f, 8000.0f, 16000.0f};
+
+// Q for a peaking filter roughly one octave wide, the conventional graphic
+// EQ bandwidth at this band spacing.
+inline constexpr float DefaultGraphicEqQ = 1.41f;
 
 struct MessageHeader
 {
@@ -113,6 +176,11 @@ struct Command
     uint8 HrtfIndex = 0;         // valid when CommandOpcode == SetHrtfFile
     float DistanceMeters = 0.0f;  // valid when CommandOpcode == SetSpeakerDistance
     bool bNearFieldEnabled = false; // valid when CommandOpcode == SetNearFieldEnabled
+    uint8 BandIndex = 0;          // valid when CommandOpcode == SetHwEqBand or SetContentEqBand, 0..MaxEqBands-1
+    EqBand Band;                  // valid when CommandOpcode == SetHwEqBand or SetContentEqBand
+    uint8 EqPresetIndex = 0;      // valid when CommandOpcode == SetHwEqPreset or SetContentEqPreset
+    std::string PresetName;       // valid when CommandOpcode == SaveHwEqPreset or SaveContentEqPreset
+    std::string ContentAppName;   // valid when CommandOpcode == SetContentEqBand, SetContentEqPreset, or SaveContentEqPreset; the persistent key from ContentStreamInfo::AppName
 };
 
 struct Status
@@ -134,6 +202,20 @@ struct AudioDeviceInfo
 {
     std::string Name;
     std::string Description;
+};
+
+// A currently-connected playback stream the content EQ can target.
+// AppName (e.g. PipeWire application.name) is the persistent, addressable
+// key used by SetContentEqBand/SetContentEqPreset/SaveContentEqPreset and
+// (eventually) genre/content classification - it's what EQ settings are
+// keyed and saved against, not the stream's transient PipeWire id, so
+// settings survive the app reconnecting. MediaName is display-only
+// (node.description or media.name), for telling multiple streams from the
+// same app apart in the GUI.
+struct ContentStreamInfo
+{
+    std::string AppName;
+    std::string MediaName;
 };
 
 // Attempts to read a header from the front of `Buffer`. Returns nullopt if
@@ -168,6 +250,24 @@ std::optional<std::vector<AudioDeviceInfo>> DecodeDeviceListResponse(const uint8
 std::optional<std::vector<std::string>> DecodeHrtfCatalogResponse(const uint8* Payload,
                                                                      uint16 PayloadLength);
 
+// Decodes an HwEqStateResponse payload: always exactly MaxEqBands entries
+// (no count prefix - the band count is fixed for now, see MaxEqBands).
+// Returns nullopt if PayloadLength isn't exactly MaxEqBands * EqBandWireSize.
+std::optional<std::array<EqBand, MaxEqBands>> DecodeHwEqStateResponse(const uint8* Payload,
+                                                                        uint16 PayloadLength);
+
+// Decodes a ContentStreamListResponse payload. Same truncated/malformed
+// contract as DecodeDeviceListResponse.
+std::optional<std::vector<ContentStreamInfo>> DecodeContentStreamListResponse(const uint8* Payload,
+                                                                                 uint16 PayloadLength);
+
+// Decodes an EqPresetCatalogResponse payload into the ordered list of
+// preset display names; an entry's index is what SetHwEqPreset/
+// SetContentEqPreset's EqPresetIndex refers to. Same contract as
+// DecodeHrtfCatalogResponse.
+std::optional<std::vector<std::string>> DecodeEqPresetCatalogResponse(const uint8* Payload,
+                                                                         uint16 PayloadLength);
+
 // Encodes a full status response message (header + payload), ready to
 // write directly to the socket.
 std::vector<uint8> EncodeStatusResponse(const Status& InStatus);
@@ -186,6 +286,19 @@ std::vector<uint8> EncodeDeviceListResponse(const std::vector<AudioDeviceInfo>& 
 // as EncodeDeviceListResponse if the list would exceed MaxPayloadSize.
 std::vector<uint8> EncodeHrtfCatalogResponse(const std::vector<std::string>& DisplayNames);
 
+// Encodes a full HwEqStateResponse message: always exactly MaxEqBands
+// entries, no count prefix, no truncation behavior needed since the size
+// is fixed (MaxEqBands * EqBandWireSize is well under MaxPayloadSize).
+std::vector<uint8> EncodeHwEqStateResponse(const std::array<EqBand, MaxEqBands>& Bands);
+
+// Encodes a full content stream list response message. Same drop-whole-
+// entries-past-MaxPayloadSize behavior as EncodeDeviceListResponse.
+std::vector<uint8> EncodeContentStreamListResponse(const std::vector<ContentStreamInfo>& Streams);
+
+// Encodes a full EQ preset catalog response message. Same behavior as
+// EncodeHrtfCatalogResponse.
+std::vector<uint8> EncodeEqPresetCatalogResponse(const std::vector<std::string>& DisplayNames);
+
 // Encodes a full request message. Used by control clients (GUI, test
 // tools); the daemon only decodes requests, it doesn't encode them.
 std::vector<uint8> EncodeGetStatusRequest();
@@ -200,6 +313,17 @@ std::vector<uint8> EncodeGetHrtfCatalogRequest();
 std::vector<uint8> EncodeSetHrtfFileRequest(uint8 HrtfIndex);
 std::vector<uint8> EncodeSetSpeakerDistanceRequest(uint8 SpeakerIndex, float DistanceMeters);
 std::vector<uint8> EncodeSetNearFieldEnabledRequest(bool bEnabled);
+std::vector<uint8> EncodeSetHwEqBandRequest(uint8 BandIndex, const EqBand& Band);
+std::vector<uint8> EncodeSetHwEqPresetRequest(uint8 EqPresetIndex);
+std::vector<uint8> EncodeSaveHwEqPresetRequest(const std::string& PresetName);
+std::vector<uint8> EncodeGetHwEqStateRequest();
+std::vector<uint8> EncodeGetContentStreamsRequest();
+std::vector<uint8> EncodeSetContentEqBandRequest(const std::string& AppName, uint8 BandIndex,
+                                                  const EqBand& Band);
+std::vector<uint8> EncodeSetContentEqPresetRequest(const std::string& AppName, uint8 EqPresetIndex);
+std::vector<uint8> EncodeSaveContentEqPresetRequest(const std::string& AppName,
+                                                     const std::string& PresetName);
+std::vector<uint8> EncodeGetEqPresetCatalogRequest();
 
 // Resolves the default control socket path: $XDG_RUNTIME_DIR/ramkolfx/control.sock,
 // falling back to /tmp/ramkolfx-<uid>/control.sock if XDG_RUNTIME_DIR isn't set.

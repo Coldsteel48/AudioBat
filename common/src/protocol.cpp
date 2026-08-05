@@ -50,6 +50,26 @@ float ReadFloatBE(const uint8* Payload)
     return Value;
 }
 
+void AppendEqBand(std::vector<uint8>& Out, const EqBand& Band)
+{
+    Out.push_back(static_cast<uint8>(Band.FilterType));
+    AppendFloatBE(Out, Band.FrequencyHz);
+    AppendFloatBE(Out, Band.GainDb);
+    AppendFloatBE(Out, Band.Q);
+}
+
+// Reads a fixed EqBandWireSize-byte EqBand from `Payload`. Caller must have
+// already verified that many bytes are available.
+EqBand ReadEqBand(const uint8* Payload)
+{
+    EqBand Band;
+    Band.FilterType = static_cast<EqFilterType>(Payload[0]);
+    Band.FrequencyHz = ReadFloatBE(Payload + 1);
+    Band.GainDb = ReadFloatBE(Payload + 5);
+    Band.Q = ReadFloatBE(Payload + 9);
+    return Band;
+}
+
 // Appends a length-prefixed (u16 BE) string. Used for fields embedded
 // alongside fixed-size data (Status, DeviceListResponse) where a raw
 // whole-payload string (like ErrorResponse's) wouldn't be unambiguous.
@@ -168,6 +188,76 @@ std::optional<Command> DecodeCommand(Opcode InOpcode, const uint8* Payload, uint
         }
         OutCommand.bNearFieldEnabled = Payload[0] != 0;
         return OutCommand;
+    case Opcode::SetHwEqBand:
+    {
+        const uint16 Needed = static_cast<uint16>(1 + EqBandWireSize);
+        if (PayloadLength < Needed || Payload[0] >= MaxEqBands ||
+            Payload[1] > static_cast<uint8>(EqFilterType::Notch))
+        {
+            return std::nullopt;
+        }
+        OutCommand.BandIndex = Payload[0];
+        OutCommand.Band = ReadEqBand(Payload + 1);
+        return OutCommand;
+    }
+    case Opcode::SetHwEqPreset:
+        if (PayloadLength < 1)
+        {
+            return std::nullopt;
+        }
+        OutCommand.EqPresetIndex = Payload[0];
+        return OutCommand;
+    case Opcode::SaveHwEqPreset:
+        OutCommand.PresetName = std::string(reinterpret_cast<const char*>(Payload), PayloadLength);
+        return OutCommand;
+    case Opcode::GetHwEqState:
+        return OutCommand;
+    case Opcode::GetContentStreams:
+        return OutCommand;
+    case Opcode::SetContentEqBand:
+    {
+        size_t Offset = 0;
+        if (!ReadString(Payload, PayloadLength, Offset, OutCommand.ContentAppName))
+        {
+            return std::nullopt;
+        }
+        const size_t Needed = 1 + EqBandWireSize;
+        if (Offset + Needed > PayloadLength || Payload[Offset] >= MaxEqBands ||
+            Payload[Offset + 1] > static_cast<uint8>(EqFilterType::Notch))
+        {
+            return std::nullopt;
+        }
+        OutCommand.BandIndex = Payload[Offset];
+        OutCommand.Band = ReadEqBand(Payload + Offset + 1);
+        return OutCommand;
+    }
+    case Opcode::SetContentEqPreset:
+    {
+        size_t Offset = 0;
+        if (!ReadString(Payload, PayloadLength, Offset, OutCommand.ContentAppName))
+        {
+            return std::nullopt;
+        }
+        if (Offset + 1 > PayloadLength)
+        {
+            return std::nullopt;
+        }
+        OutCommand.EqPresetIndex = Payload[Offset];
+        return OutCommand;
+    }
+    case Opcode::SaveContentEqPreset:
+    {
+        size_t Offset = 0;
+        if (!ReadString(Payload, PayloadLength, Offset, OutCommand.ContentAppName))
+        {
+            return std::nullopt;
+        }
+        OutCommand.PresetName =
+            std::string(reinterpret_cast<const char*>(Payload + Offset), PayloadLength - Offset);
+        return OutCommand;
+    }
+    case Opcode::GetEqPresetCatalog:
+        return OutCommand;
     default:
         return std::nullopt;
     }
@@ -245,6 +335,72 @@ std::optional<std::vector<AudioDeviceInfo>> DecodeDeviceListResponse(const uint8
 
 std::optional<std::vector<std::string>> DecodeHrtfCatalogResponse(const uint8* Payload,
                                                                     uint16 PayloadLength)
+{
+    size_t Offset = 0;
+    if (Offset + 2 > PayloadLength)
+    {
+        return std::nullopt;
+    }
+    const uint16 Count = static_cast<uint16>((Payload[Offset] << 8) | Payload[Offset + 1]);
+    Offset += 2;
+
+    std::vector<std::string> DisplayNames;
+    DisplayNames.reserve(Count);
+    for (uint16 i = 0; i < Count; ++i)
+    {
+        std::string Name;
+        if (!ReadString(Payload, PayloadLength, Offset, Name))
+        {
+            return std::nullopt;
+        }
+        DisplayNames.push_back(std::move(Name));
+    }
+    return DisplayNames;
+}
+
+std::optional<std::array<EqBand, MaxEqBands>> DecodeHwEqStateResponse(const uint8* Payload,
+                                                                        uint16 PayloadLength)
+{
+    if (PayloadLength != static_cast<uint16>(MaxEqBands * EqBandWireSize))
+    {
+        return std::nullopt;
+    }
+    std::array<EqBand, MaxEqBands> Bands;
+    for (size_t i = 0; i < MaxEqBands; ++i)
+    {
+        Bands[i] = ReadEqBand(Payload + i * EqBandWireSize);
+    }
+    return Bands;
+}
+
+std::optional<std::vector<ContentStreamInfo>> DecodeContentStreamListResponse(const uint8* Payload,
+                                                                                 uint16 PayloadLength)
+{
+    size_t Offset = 0;
+    if (Offset + 2 > PayloadLength)
+    {
+        return std::nullopt;
+    }
+    const uint16 Count = static_cast<uint16>((Payload[Offset] << 8) | Payload[Offset + 1]);
+    Offset += 2;
+
+    std::vector<ContentStreamInfo> Streams;
+    Streams.reserve(Count);
+    for (uint16 i = 0; i < Count; ++i)
+    {
+        ContentStreamInfo Info;
+        if (!ReadString(Payload, PayloadLength, Offset, Info.AppName) ||
+            !ReadString(Payload, PayloadLength, Offset, Info.MediaName))
+        {
+            return std::nullopt;
+        }
+        Streams.push_back(std::move(Info));
+    }
+    return Streams;
+}
+
+std::optional<std::vector<std::string>> DecodeEqPresetCatalogResponse(const uint8* Payload,
+                                                                         uint16 PayloadLength)
 {
     size_t Offset = 0;
     if (Offset + 2 > PayloadLength)
@@ -363,6 +519,79 @@ std::vector<uint8> EncodeHrtfCatalogResponse(const std::vector<std::string>& Dis
     return Out;
 }
 
+std::vector<uint8> EncodeHwEqStateResponse(const std::array<EqBand, MaxEqBands>& Bands)
+{
+    std::vector<uint8> Payload;
+    Payload.reserve(MaxEqBands * EqBandWireSize);
+    for (const EqBand& Band : Bands)
+    {
+        AppendEqBand(Payload, Band);
+    }
+
+    std::vector<uint8> Out;
+    Out.reserve(HeaderSize + Payload.size());
+    AppendHeader(Out, Opcode::HwEqStateResponse, static_cast<uint16>(Payload.size()));
+    Out.insert(Out.end(), Payload.begin(), Payload.end());
+    return Out;
+}
+
+std::vector<uint8> EncodeContentStreamListResponse(const std::vector<ContentStreamInfo>& Streams)
+{
+    std::vector<uint8> Payload;
+    Payload.push_back(0); // count placeholder, patched below once the final count is known
+    Payload.push_back(0);
+
+    uint16 Count = 0;
+    for (const auto& Stream : Streams)
+    {
+        std::vector<uint8> Entry;
+        AppendString(Entry, Stream.AppName);
+        AppendString(Entry, Stream.MediaName);
+        if (Payload.size() + Entry.size() > MaxPayloadSize)
+        {
+            break; // stop before exceeding the payload cap, never mid-entry
+        }
+        Payload.insert(Payload.end(), Entry.begin(), Entry.end());
+        ++Count;
+    }
+    Payload[0] = static_cast<uint8>((Count >> 8) & 0xFF);
+    Payload[1] = static_cast<uint8>(Count & 0xFF);
+
+    std::vector<uint8> Out;
+    Out.reserve(HeaderSize + Payload.size());
+    AppendHeader(Out, Opcode::ContentStreamListResponse, static_cast<uint16>(Payload.size()));
+    Out.insert(Out.end(), Payload.begin(), Payload.end());
+    return Out;
+}
+
+std::vector<uint8> EncodeEqPresetCatalogResponse(const std::vector<std::string>& DisplayNames)
+{
+    std::vector<uint8> Payload;
+    Payload.push_back(0); // count placeholder, patched below once the final count is known
+    Payload.push_back(0);
+
+    uint16 Count = 0;
+    for (const auto& Name : DisplayNames)
+    {
+        std::vector<uint8> Entry;
+        AppendString(Entry, Name);
+        if (Payload.size() + Entry.size() > MaxPayloadSize)
+        {
+            break; // stop before exceeding the payload cap, never mid-entry
+        }
+        Payload.insert(Payload.end(), Entry.begin(), Entry.end());
+        ++Count;
+    }
+    Payload[0] = static_cast<uint8>((Count >> 8) & 0xFF);
+    Payload[1] = static_cast<uint8>(Count & 0xFF);
+
+    std::vector<uint8> Out;
+    Out.reserve(HeaderSize + Payload.size());
+    AppendHeader(Out, Opcode::EqPresetCatalogResponse, static_cast<uint16>(Payload.size()));
+    Out.insert(Out.end(), Payload.begin(), Payload.end());
+    return Out;
+}
+
 std::vector<uint8> EncodeGetStatusRequest()
 {
     std::vector<uint8> Out;
@@ -464,6 +693,101 @@ std::vector<uint8> EncodeSetNearFieldEnabledRequest(bool bEnabled)
     Out.reserve(HeaderSize + 1);
     AppendHeader(Out, Opcode::SetNearFieldEnabled, 1);
     Out.push_back(bEnabled ? 1 : 0);
+    return Out;
+}
+
+std::vector<uint8> EncodeSetHwEqBandRequest(uint8 BandIndex, const EqBand& Band)
+{
+    std::vector<uint8> Out;
+    const size_t PayloadSize = 1 + EqBandWireSize;
+    Out.reserve(HeaderSize + PayloadSize);
+    AppendHeader(Out, Opcode::SetHwEqBand, static_cast<uint16>(PayloadSize));
+    Out.push_back(BandIndex);
+    AppendEqBand(Out, Band);
+    return Out;
+}
+
+std::vector<uint8> EncodeSetHwEqPresetRequest(uint8 EqPresetIndex)
+{
+    std::vector<uint8> Out;
+    Out.reserve(HeaderSize + 1);
+    AppendHeader(Out, Opcode::SetHwEqPreset, 1);
+    Out.push_back(EqPresetIndex);
+    return Out;
+}
+
+std::vector<uint8> EncodeSaveHwEqPresetRequest(const std::string& PresetName)
+{
+    std::vector<uint8> Out;
+    const size_t Len = PresetName.size() > MaxPayloadSize ? MaxPayloadSize : PresetName.size();
+    Out.reserve(HeaderSize + Len);
+    AppendHeader(Out, Opcode::SaveHwEqPreset, static_cast<uint16>(Len));
+    Out.insert(Out.end(), PresetName.begin(), PresetName.begin() + static_cast<std::ptrdiff_t>(Len));
+    return Out;
+}
+
+std::vector<uint8> EncodeGetHwEqStateRequest()
+{
+    std::vector<uint8> Out;
+    AppendHeader(Out, Opcode::GetHwEqState, 0);
+    return Out;
+}
+
+std::vector<uint8> EncodeGetContentStreamsRequest()
+{
+    std::vector<uint8> Out;
+    AppendHeader(Out, Opcode::GetContentStreams, 0);
+    return Out;
+}
+
+std::vector<uint8> EncodeSetContentEqBandRequest(const std::string& AppName, uint8 BandIndex,
+                                                  const EqBand& Band)
+{
+    std::vector<uint8> Payload;
+    AppendString(Payload, AppName);
+    Payload.push_back(BandIndex);
+    AppendEqBand(Payload, Band);
+
+    std::vector<uint8> Out;
+    Out.reserve(HeaderSize + Payload.size());
+    AppendHeader(Out, Opcode::SetContentEqBand, static_cast<uint16>(Payload.size()));
+    Out.insert(Out.end(), Payload.begin(), Payload.end());
+    return Out;
+}
+
+std::vector<uint8> EncodeSetContentEqPresetRequest(const std::string& AppName, uint8 EqPresetIndex)
+{
+    std::vector<uint8> Payload;
+    AppendString(Payload, AppName);
+    Payload.push_back(EqPresetIndex);
+
+    std::vector<uint8> Out;
+    Out.reserve(HeaderSize + Payload.size());
+    AppendHeader(Out, Opcode::SetContentEqPreset, static_cast<uint16>(Payload.size()));
+    Out.insert(Out.end(), Payload.begin(), Payload.end());
+    return Out;
+}
+
+std::vector<uint8> EncodeSaveContentEqPresetRequest(const std::string& AppName,
+                                                     const std::string& PresetName)
+{
+    std::vector<uint8> Payload;
+    AppendString(Payload, AppName);
+    const size_t Available = Payload.size() < MaxPayloadSize ? MaxPayloadSize - Payload.size() : 0;
+    const size_t Len = PresetName.size() > Available ? Available : PresetName.size();
+    Payload.insert(Payload.end(), PresetName.begin(), PresetName.begin() + static_cast<std::ptrdiff_t>(Len));
+
+    std::vector<uint8> Out;
+    Out.reserve(HeaderSize + Payload.size());
+    AppendHeader(Out, Opcode::SaveContentEqPreset, static_cast<uint16>(Payload.size()));
+    Out.insert(Out.end(), Payload.begin(), Payload.end());
+    return Out;
+}
+
+std::vector<uint8> EncodeGetEqPresetCatalogRequest()
+{
+    std::vector<uint8> Out;
+    AppendHeader(Out, Opcode::GetEqPresetCatalog, 0);
     return Out;
 }
 

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <array>
 #include <optional>
 #include <vector>
 
@@ -53,6 +54,8 @@ public:
     std::optional<std::vector<AudioDeviceInfo>> RequestDevices();
     std::optional<std::vector<std::string>> RequestHrtfCatalog();
     std::optional<Status> SetHrtfFile(uint8 HrtfIndex);
+    std::optional<Status> SetHwEqBand(uint8 BandIndex, const EqBand& Band);
+    std::optional<std::array<EqBand, MaxEqBands>> RequestHwEqState();
 
 private:
     struct RawResponse

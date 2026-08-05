@@ -73,6 +73,10 @@ GuiPreferences LoadGuiPreferences()
     {
         Result.bMirrorModeEnabled = It->second == "1";
     }
+    if (const auto It = Fields.find("advanced_eq_mode"); It != Fields.end())
+    {
+        Result.bAdvancedEqMode = It->second == "1";
+    }
     return Result;
 }
 
@@ -91,6 +95,7 @@ void SaveGuiPreferences(const GuiPreferences& InPreferences)
         return;
     }
     File << "mirror_left_right=" << (InPreferences.bMirrorModeEnabled ? 1 : 0) << "\n";
+    File << "advanced_eq_mode=" << (InPreferences.bAdvancedEqMode ? 1 : 0) << "\n";
     File.close();
 
     if (std::rename(TempPath.c_str(), Path.c_str()) != 0)

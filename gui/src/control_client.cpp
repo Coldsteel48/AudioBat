@@ -233,4 +233,27 @@ std::optional<Status> ControlClient::SetHrtfFile(uint8 HrtfIndex)
     return SendStatusRequest(EncodeSetHrtfFileRequest(HrtfIndex));
 }
 
+std::optional<Status> ControlClient::SetHwEqBand(uint8 BandIndex, const EqBand& Band)
+{
+    return SendStatusRequest(EncodeSetHwEqBandRequest(BandIndex, Band));
+}
+
+std::optional<std::array<EqBand, MaxEqBands>> ControlClient::RequestHwEqState()
+{
+    auto Response = SendRawRequest(EncodeGetHwEqStateRequest());
+    if (!Response || Response->MessageOpcode != Opcode::HwEqStateResponse)
+    {
+        return std::nullopt;
+    }
+
+    auto DecodedBands = DecodeHwEqStateResponse(Response->Payload.data(),
+                                                  static_cast<uint16>(Response->Payload.size()));
+    if (!DecodedBands)
+    {
+        Disconnect();
+        return std::nullopt;
+    }
+    return DecodedBands;
+}
+
 } // namespace ramkolfx::gui

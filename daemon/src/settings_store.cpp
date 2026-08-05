@@ -50,6 +50,11 @@ std::string SpeakerKey(size_t Index, const char* Field)
     return "speaker." + std::to_string(Index) + "." + Field;
 }
 
+std::string HwEqBandKey(size_t Index, const char* Field)
+{
+    return "hweq." + std::to_string(Index) + "." + Field;
+}
+
 } // namespace
 
 SettingsStore::SettingsStore() : SettingsPath(DefaultSettingsPath())
@@ -133,6 +138,15 @@ std::optional<PersistedSettings> SettingsStore::Load() const
         Result.SpeakerDistanceMeters[i] = GetFloat(SpeakerKey(i, "distance"), Result.SpeakerDistanceMeters[i]);
         Result.SpeakerMuted[i] = GetBool(SpeakerKey(i, "muted"), Result.SpeakerMuted[i]);
     }
+    for (size_t i = 0; i < MaxEqBands; ++i)
+    {
+        EqBand& Band = Result.HwEqBands[i];
+        Band.FilterType = static_cast<EqFilterType>(
+            GetLong(HwEqBandKey(i, "type"), static_cast<long>(Band.FilterType)));
+        Band.FrequencyHz = GetFloat(HwEqBandKey(i, "freq"), Band.FrequencyHz);
+        Band.GainDb = GetFloat(HwEqBandKey(i, "gain"), Band.GainDb);
+        Band.Q = GetFloat(HwEqBandKey(i, "q"), Band.Q);
+    }
     return Result;
 }
 
@@ -148,6 +162,14 @@ void SettingsStore::Save(const PersistedSettings& InSettings) const
         Out << SpeakerKey(i, "azimuth") << "=" << InSettings.SpeakerAzimuthDegrees[i] << "\n";
         Out << SpeakerKey(i, "distance") << "=" << InSettings.SpeakerDistanceMeters[i] << "\n";
         Out << SpeakerKey(i, "muted") << "=" << (InSettings.SpeakerMuted[i] ? 1 : 0) << "\n";
+    }
+    for (size_t i = 0; i < MaxEqBands; ++i)
+    {
+        const EqBand& Band = InSettings.HwEqBands[i];
+        Out << HwEqBandKey(i, "type") << "=" << static_cast<int>(Band.FilterType) << "\n";
+        Out << HwEqBandKey(i, "freq") << "=" << Band.FrequencyHz << "\n";
+        Out << HwEqBandKey(i, "gain") << "=" << Band.GainDb << "\n";
+        Out << HwEqBandKey(i, "q") << "=" << Band.Q << "\n";
     }
 
     // Write-to-temp-then-rename: rename() is atomic within the same

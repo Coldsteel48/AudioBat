@@ -19,6 +19,12 @@ namespace ramkolfx::gui
 struct GuiPreferences
 {
     bool bMirrorModeEnabled = false;
+
+    // Whether the HW EQ panel shows per-band frequency/Q/filter-type
+    // controls (advanced) or just the 10 ISO-labeled gain sliders
+    // (simple). Purely a display choice - the daemon's wire format is
+    // already fully parametric either way, see protocol.hpp's EqBand.
+    bool bAdvancedEqMode = false;
 };
 
 // Reads $XDG_CONFIG_HOME/ramkolfx/gui_prefs.conf (falling back to

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -34,6 +35,7 @@ class DspStage;
 class PassthroughStage;
 class AmbisonicsStage;
 class HrtfDeck;
+class HwEqStage;
 class ControlServer;
 class DeviceRegistry;
 class SingleInstanceLock;
@@ -193,6 +195,22 @@ private:
     std::unique_ptr<PassthroughStage> OffStage;
     std::unique_ptr<AmbisonicsStage> BasicStage;
     std::unique_ptr<HrtfDeck> AdvancedStage;
+
+    // Applied unconditionally after ActiveStage(), on the final downmixed
+    // stereo signal - not one of the three switchable modes above. See
+    // protocol.hpp's comment near EqFilterType for why this is a single
+    // global curve rather than per-speaker-channel.
+    std::unique_ptr<HwEqStage> HwEq;
+
+    // Control-thread-side source of truth for "current 10 bands" (HwEq
+    // itself only holds derived filter coefficients, not the EqBand values
+    // they came from) - mirrors how SharedLayout is the source of truth
+    // for speaker state. Guarded by HwEqMutex rather than SharedLayout's
+    // own per-field atomics since ControlServer can run HandleControlCommand
+    // concurrently from more than one client connection (same reasoning as
+    // HrtfCatalogMutex).
+    std::mutex HwEqMutex;
+    std::array<EqBand, MaxEqBands> HwEqBandState;
 
     // Bundled catalog (BuildHrtfCatalog()) plus whatever's currently in
     // UserHrtfDirectory; index into this is what the GetHrtfCatalog/

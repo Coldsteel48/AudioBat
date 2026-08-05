@@ -43,6 +43,10 @@ void App::Tick(float DeltaTimeSeconds)
                     {
                         HrtfCatalog = std::move(*HrtfResult);
                     }
+                    if (auto EqResult = Client.RequestHwEqState())
+                    {
+                        HwEqBands = *EqResult;
+                    }
                     DevicePollTimerSeconds = DevicePollIntervalSeconds;
                     bConnected = true;
                 }
@@ -425,6 +429,92 @@ void App::DrawUI()
         {
             bConnected = false;
             ReconnectTimerSeconds = 0.0f;
+        }
+    }
+
+    ImGui::Spacing();
+    ImGui::TextUnformatted("Equalizer (10-band)");
+    if (ImGui::Checkbox("Advanced band editing", &bAdvancedEqMode))
+    {
+        SaveGuiPreferences({.bMirrorModeEnabled = bMirrorModeEnabled, .bAdvancedEqMode = bAdvancedEqMode});
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Off: gain-only sliders at fixed ISO center frequencies.\nOn: also edit each "
+                           "band's filter type, frequency, and Q - the wire format supports this either "
+                           "way, this only changes what the panel shows.");
+    }
+
+    // Sends BandIndex's current (already locally-updated) EqBand and folds
+    // the response into LastStatus, same fail-and-disconnect pattern as
+    // every other control above.
+    auto SendHwEqBand = [&](uint8 BandIndex)
+    {
+        if (auto Result = Client.SetHwEqBand(BandIndex, HwEqBands[BandIndex]))
+        {
+            LastStatus = *Result;
+        }
+        else
+        {
+            bConnected = false;
+            ReconnectTimerSeconds = 0.0f;
+        }
+    };
+
+    static const char* EqFilterTypeLabels[] = {"Peaking", "Low Shelf", "High Shelf",
+                                                "Low Pass", "High Pass", "Notch"};
+
+    for (size_t i = 0; i < MaxEqBands; ++i)
+    {
+        ImGui::PushID(static_cast<int>(i));
+        ImGui::BeginGroup();
+
+        float Gain = HwEqBands[i].GainDb;
+        if (ImGui::VSliderFloat("##gain", ImVec2(28.0f * DpiScale, 120.0f * DpiScale), &Gain, -12.0f, 12.0f,
+                                 "%.0f"))
+        {
+            HwEqBands[i].GainDb = Gain;
+            SendHwEqBand(static_cast<uint8>(i));
+        }
+
+        const float NominalHz = DefaultEqCenterFrequenciesHz[i];
+        const std::string FreqLabel = NominalHz >= 1000.0f
+                                           ? std::to_string(static_cast<int>(NominalHz / 1000.0f)) + "k"
+                                           : std::to_string(static_cast<int>(NominalHz));
+        ImGui::TextUnformatted(FreqLabel.c_str());
+
+        if (bAdvancedEqMode)
+        {
+            ImGui::SetNextItemWidth(72.0f * DpiScale);
+            int FilterTypeIndex = static_cast<int>(HwEqBands[i].FilterType);
+            if (ImGui::Combo("##type", &FilterTypeIndex, EqFilterTypeLabels, IM_ARRAYSIZE(EqFilterTypeLabels)))
+            {
+                HwEqBands[i].FilterType = static_cast<EqFilterType>(FilterTypeIndex);
+                SendHwEqBand(static_cast<uint8>(i));
+            }
+
+            ImGui::SetNextItemWidth(72.0f * DpiScale);
+            float Frequency = HwEqBands[i].FrequencyHz;
+            if (ImGui::DragFloat("##freq", &Frequency, 1.0f, 20.0f, 20000.0f, "%.0f Hz"))
+            {
+                HwEqBands[i].FrequencyHz = Frequency;
+                SendHwEqBand(static_cast<uint8>(i));
+            }
+
+            ImGui::SetNextItemWidth(72.0f * DpiScale);
+            float Q = HwEqBands[i].Q;
+            if (ImGui::DragFloat("##q", &Q, 0.01f, 0.1f, 10.0f, "Q %.2f"))
+            {
+                HwEqBands[i].Q = Q;
+                SendHwEqBand(static_cast<uint8>(i));
+            }
+        }
+
+        ImGui::EndGroup();
+        ImGui::PopID();
+        if (i + 1 < MaxEqBands)
+        {
+            ImGui::SameLine();
         }
     }
 

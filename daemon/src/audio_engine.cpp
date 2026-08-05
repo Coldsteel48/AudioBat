@@ -28,6 +28,7 @@
 #include "dsp/binaural_stage.hpp"
 #include "dsp/dsp_stage.hpp"
 #include "dsp/hrtf_deck.hpp"
+#include "dsp/hw_eq_stage.hpp"
 #include "dsp/passthrough_stage.hpp"
 #include "hardware_output.hpp"
 #include "hrtf_default_path.hpp"
@@ -312,6 +313,12 @@ int AudioEngine::Run()
         fprintf(stderr, "[ramkolfxd] restored settings from previous session\n");
     }
 
+    {
+        std::lock_guard<std::mutex> Lock(HwEqMutex);
+        HwEqBandState = LoadedSettings ? LoadedSettings->HwEqBands : DefaultHwEqBands();
+    }
+    HwEq = std::make_unique<HwEqStage>(HwEqBandState, static_cast<float>(HardwareOutput::SampleRate));
+
     // Directory the daemon watches for user-supplied SOFA files - unlike
     // the bundled catalog, this isn't rebuilt on a timer: the inotify
     // watch set up below rebuilds it the moment a file is added or
@@ -475,6 +482,7 @@ void AudioEngine::Teardown()
     OffStage.reset();
     BasicStage.reset();
     AdvancedStage.reset();
+    HwEq.reset();
 
     if (MainLoop)
     {
@@ -524,6 +532,8 @@ void AudioEngine::HandleVirtualSinkAudio(const float* Interleaved, uint32 Frames
 
     ActiveStage().Process(InputScratch.data(), VirtualSink::Channels, DspScratch.data(),
                            HardwareOutput::Channels, Frames);
+    HwEq->Process(DspScratch.data(), HardwareOutput::Channels, DspScratch.data(), HardwareOutput::Channels,
+                  Frames);
     StereoMixBuffer.Push(DspScratch.data(), Frames * HardwareOutput::Channels);
 }
 
@@ -615,10 +625,17 @@ std::vector<uint8> AudioEngine::HandleControlCommand(const Command& InCommand)
     // every command rather than needing a dedicated timer, since the GUI
     // already polls GetStatus at a steady ~4Hz.
     AdvancedStage->CollectGarbage();
+    HwEq->CollectGarbage();
 
     if (InCommand.CommandOpcode == Opcode::GetDevices)
     {
         return EncodeDeviceListResponse(Devices->GetDevices());
+    }
+
+    if (InCommand.CommandOpcode == Opcode::GetHwEqState)
+    {
+        std::lock_guard<std::mutex> Lock(HwEqMutex);
+        return EncodeHwEqStateResponse(HwEqBandState);
     }
 
     if (InCommand.CommandOpcode == Opcode::GetHrtfCatalog)
@@ -738,6 +755,20 @@ std::vector<uint8> AudioEngine::HandleControlCommand(const Command& InCommand)
                     InCommand.HrtfIndex, CatalogSize);
         }
     }
+    else if (InCommand.CommandOpcode == Opcode::SetHwEqBand)
+    {
+        {
+            std::lock_guard<std::mutex> Lock(HwEqMutex);
+            HwEqBandState[InCommand.BandIndex] = InCommand.Band;
+        }
+        HwEq->SetBands(HwEqBandState);
+        bPersistedStateChanged = true;
+    }
+    // SetHwEqPreset/SaveHwEqPreset and every Content* EQ opcode decode
+    // successfully (see protocol.cpp) but have no handler yet - they're
+    // Phase 2 (named presets keyed per-output-device and per-app). Falling
+    // through here just returns the current Status, same as any other
+    // unrecognized-but-decodable command.
 
     Status OutStatus;
     OutStatus.Mode = Mode.load(std::memory_order_relaxed);
@@ -772,6 +803,10 @@ void AudioEngine::PersistCurrentSettings(const Status& CurrentStatus)
     ToSave.SpeakerMuted = CurrentStatus.SpeakerMuted;
     ToSave.bNearFieldEnabled = CurrentStatus.bNearFieldEnabled;
     ToSave.OutputDeviceName = CurrentStatus.OutputDeviceName;
+    {
+        std::lock_guard<std::mutex> Lock(HwEqMutex);
+        ToSave.HwEqBands = HwEqBandState;
+    }
     {
         std::lock_guard<std::mutex> Lock(HrtfCatalogMutex);
         if (CurrentStatus.ActiveHrtfIndex < RuntimeHrtfCatalog.size())

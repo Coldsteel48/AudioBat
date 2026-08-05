@@ -90,6 +90,9 @@ add_executable(ramkolfxd
     src/dsp/binaural_stage.cpp
     src/dsp/binaural_voice.cpp
     src/dsp/hrtf_deck.cpp
+    src/dsp/biquad.cpp
+    src/dsp/graphic_eq_filter.cpp
+    src/dsp/hw_eq_stage.cpp
     src/control/control_server.cpp
 )
 

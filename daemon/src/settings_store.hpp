@@ -13,15 +13,19 @@
 #include <string>
 
 #include "ramkolfx/protocol.hpp"
+#include "dsp/graphic_eq_filter.hpp"
 
 namespace ramkolfx
 {
 
 // Snapshot of daemon state worth remembering across restarts: spatial
 // mode, per-speaker layout (azimuth/distance/mute), the near-field
-// toggle, the pinned output device, and the active HRTF source.
-// Deliberately excludes test-noise: that's a one-off calibration aid, not
-// something anyone wants blasting on every daemon start.
+// toggle, the pinned output device, the active HRTF source, and the
+// single global HW EQ curve (see HwEqStage/GraphicEqFilter - not yet a
+// keyed multi-preset system, just today's live curve, same as everything
+// else here). Deliberately excludes test-noise: that's a one-off
+// calibration aid, not something anyone wants blasting on every daemon
+// start.
 struct PersistedSettings
 {
     SpatialMode Mode = SpatialMode::Off;
@@ -37,6 +41,8 @@ struct PersistedSettings
     // missing), and a stale index would silently resolve to the wrong
     // entry instead of just failing to match.
     std::string ActiveHrtfDisplayName;
+
+    std::array<EqBand, MaxEqBands> HwEqBands = DefaultHwEqBands();
 };
 
 // Loads/saves PersistedSettings as a small text file under
