@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include "imgui.h"
+#include "ui_palette.hpp"
 
 namespace ramkolfx::gui
 {
@@ -22,6 +23,57 @@ constexpr float DialSize = 220.0f;
 constexpr float HandleRadius = 9.0f;
 constexpr float Pi = 3.14159265358979323846f;
 constexpr const char* SpeakerLabels[SpeakerCount] = {"FL", "FR", "FC", "RL", "RR", "SL", "SR"};
+
+// Local-space "speaker cone" trapezoid points (narrow end = the front of
+// the cone, facing away from the dial's center) and its two ridge lines,
+// in the same unscaled unit space as HandleRadius - see DrawSpeakerCone.
+constexpr float ConeTipHalfWidth = 4.0f;
+constexpr float ConeTipOffset = 11.0f;
+constexpr float ConeBaseHalfWidth = 9.0f;
+constexpr float ConeBaseOffset = 7.0f;
+constexpr float ConeRidge1Offset = 0.0f;
+constexpr float ConeRidge1HalfWidth = 6.0f;
+constexpr float ConeRidge2Offset = 4.0f;
+constexpr float ConeRidge2HalfWidth = 7.5f;
+
+// The test-noise pulse animation loops once per this many seconds (see
+// DrawPositionDial's PulseTimeSeconds parameter), oscillating between
+// scale/alpha extremes matching the reference design's ~1s ease-in-out
+// pulse.
+constexpr float PulsePeriodSeconds = 1.0f;
+constexpr float PulseScaleMax = 1.25f;
+constexpr float PulseAlphaMin = 0.55f;
+
+// Draws one speaker's cone shape, rotated to face Direction (the same
+// unit vector used to place its handle - see AzimuthToUnitVector), with
+// two ridge lines for a driver-cone look. Perp is Direction rotated 90
+// degrees, giving the cone its width axis. EffectiveScale folds together
+// Scale and the current pulse scale (1.0 when not pulsing).
+void DrawSpeakerCone(ImDrawList* DrawList, ImVec2 Center, ImVec2 Direction, ImVec2 Perp, float EffectiveScale,
+                     ImU32 FillColor, ImU32 RidgeColor)
+{
+    auto LocalToWorld = [&](float Lx, float Ly)
+    {
+        return ImVec2(Center.x + (Direction.x * -Ly + Perp.x * Lx) * EffectiveScale,
+                       Center.y + (Direction.y * -Ly + Perp.y * Lx) * EffectiveScale);
+    };
+
+    const ImVec2 Poly[4] = {
+        LocalToWorld(-ConeTipHalfWidth, -ConeTipOffset),
+        LocalToWorld(ConeTipHalfWidth, -ConeTipOffset),
+        LocalToWorld(ConeBaseHalfWidth, ConeBaseOffset),
+        LocalToWorld(-ConeBaseHalfWidth, ConeBaseOffset),
+    };
+    DrawList->AddConvexPolyFilled(Poly, 4, FillColor);
+
+    const ImVec2 Ridge1A = LocalToWorld(-ConeRidge1HalfWidth, ConeRidge1Offset);
+    const ImVec2 Ridge1B = LocalToWorld(ConeRidge1HalfWidth, ConeRidge1Offset);
+    DrawList->AddLine(Ridge1A, Ridge1B, RidgeColor, 1.0f * EffectiveScale);
+
+    const ImVec2 Ridge2A = LocalToWorld(-ConeRidge2HalfWidth, ConeRidge2Offset);
+    const ImVec2 Ridge2B = LocalToWorld(ConeRidge2HalfWidth, ConeRidge2Offset);
+    DrawList->AddLine(Ridge2A, Ridge2B, RidgeColor, 1.0f * EffectiveScale);
+}
 
 // Left/right counterpart of each speaker, by index into AzimuthsDegrees /
 // DistancesMeters (matching SpeakerLabels' order FL,FR,FC,RL,RR,SL,SR); -1
@@ -84,7 +136,7 @@ bool DrawPositionDial(const char* Label, std::array<float, SpeakerCount>& Azimut
                       std::array<float, SpeakerCount>& DistancesMeters,
                       const std::array<bool, SpeakerCount>& Muted, bool bMirrorEnabled,
                       int* OutChangedIndex, int* OutMirroredIndex, int* OutMuteToggledIndex,
-                      int* OutSoloIndex, float Scale)
+                      int* OutSoloIndex, float Scale, bool bTestNoiseEnabled, float PulseTimeSeconds)
 {
     *OutChangedIndex = -1;
     *OutMirroredIndex = -1;
@@ -105,12 +157,40 @@ bool DrawPositionDial(const char* Label, std::array<float, SpeakerCount>& Azimut
     const float OuterRadiusPx = ScaledDialSize * 0.5f - ScaledHandleRadius - 4.0f * Scale;
     const float InnerRadiusPx = OuterRadiusPx * InnerRadiusFraction;
 
-    DrawList->AddCircle(Center, OuterRadiusPx, IM_COL32(120, 120, 135, 255), 64, 1.5f * Scale);
-    DrawList->AddCircle(Center, InnerRadiusPx, IM_COL32(80, 80, 92, 200), 64, 1.0f * Scale);
-    DrawList->AddLine(Center, ImVec2(Center.x, Center.y - OuterRadiusPx), IM_COL32(90, 200, 255, 180),
-                       2.0f * Scale);
+    // Concentric rings (faint accent-blue), matching the reference radar's
+    // "range ring" look, from innermost to outermost.
+    DrawList->AddCircle(Center, OuterRadiusPx * 0.37f, IM_COL32(56, 193, 255, 36), 64, 1.0f * Scale);
+    DrawList->AddCircle(Center, OuterRadiusPx * 0.63f, IM_COL32(56, 193, 255, 36), 64, 1.0f * Scale);
+    DrawList->AddCircle(Center, OuterRadiusPx, IM_COL32(56, 193, 255, 56), 64, 1.5f * Scale);
+
+    // Faint radial spokes every 45 degrees, from the inner ring out to the
+    // outer ring.
+    for (int i = 0; i < 8; ++i)
+    {
+        const float SpokeAngle = static_cast<float>(i) * (Pi / 4.0f);
+        const ImVec2 SpokeDir(sinf(SpokeAngle), -cosf(SpokeAngle));
+        DrawList->AddLine(
+            ImVec2(Center.x + SpokeDir.x * InnerRadiusPx, Center.y + SpokeDir.y * InnerRadiusPx),
+            ImVec2(Center.x + SpokeDir.x * OuterRadiusPx, Center.y + SpokeDir.y * OuterRadiusPx),
+            IM_COL32(255, 255, 255, 13), 1.0f * Scale);
+    }
+
+    // Center crosshair reticle.
+    DrawList->AddCircle(Center, 14.0f * Scale, IM_COL32(56, 193, 255, 90), 32, 1.0f * Scale);
+    DrawList->AddLine(ImVec2(Center.x - 7.0f * Scale, Center.y), ImVec2(Center.x + 7.0f * Scale, Center.y),
+                       IM_COL32(56, 193, 255, 90), 1.0f * Scale);
+    DrawList->AddLine(ImVec2(Center.x, Center.y - 7.0f * Scale), ImVec2(Center.x, Center.y + 7.0f * Scale),
+                       IM_COL32(56, 193, 255, 90), 1.0f * Scale);
+
     DrawList->AddText(ImVec2(Center.x - 18.0f * Scale, Center.y - OuterRadiusPx - 18.0f * Scale),
-                       IM_COL32(180, 190, 200, 255), "FRONT");
+                       palette::TextMuted, "FRONT");
+
+    // Pulse phase (0..1, loops every PulsePeriodSeconds) for the
+    // test-noise animation - shared by every unmuted speaker this frame.
+    const float PulsePhase =
+        sinf(PulseTimeSeconds * (2.0f * Pi / PulsePeriodSeconds)) * 0.5f + 0.5f;
+    const float PulseScale = 1.0f + (PulseScaleMax - 1.0f) * PulsePhase;
+    const float PulseAlphaMul = 1.0f - (1.0f - PulseAlphaMin) * PulsePhase;
 
     bool bChanged = false;
     for (size_t i = 0; i < SpeakerCount; ++i)
@@ -147,11 +227,28 @@ bool DrawPositionDial(const char* Label, std::array<float, SpeakerCount>& Azimut
         }
 
         const bool bIsMuted = Muted[i];
-        const ImU32 HandleColor = bIsMuted   ? IM_COL32(140, 90, 90, 255)
-                                   : bActive  ? IM_COL32(255, 200, 80, 255)
-                                   : bHovered ? IM_COL32(255, 255, 255, 255)
-                                              : IM_COL32(90, 200, 255, 255);
-        DrawList->AddCircleFilled(HandlePos, ScaledHandleRadius, HandleColor);
+        const bool bPulsing = bTestNoiseEnabled && !bIsMuted;
+        const float SpeakerScale = Scale * (bPulsing ? PulseScale : 1.0f);
+        const float AlphaMul = bPulsing ? PulseAlphaMul : 1.0f;
+
+        const ImU32 ConeFillColor = bIsMuted   ? IM_COL32(58, 66, 80, 255)
+                                     : bActive  ? IM_COL32(255, 200, 80, 255)
+                                     : bHovered ? IM_COL32(255, 255, 255, 255)
+                                                : IM_COL32(56, 189, 248, static_cast<int>(255 * AlphaMul));
+        const ImU32 RidgeColor = IM_COL32(6, 18, 28, static_cast<int>(102 * AlphaMul));
+
+        if (!bIsMuted)
+        {
+            // Soft glow behind the cone for every active speaker, matching
+            // the reference design's drop-shadow accent glow; brighter
+            // while pulsing.
+            const int GlowAlpha = static_cast<int>((bPulsing ? 90 : 55) * AlphaMul);
+            DrawList->AddCircleFilled(HandlePos, ScaledHandleRadius * 1.9f * (bPulsing ? PulseScale : 1.0f),
+                                      IM_COL32(56, 189, 248, GlowAlpha));
+        }
+
+        const ImVec2 Perp(-Direction.y, Direction.x);
+        DrawSpeakerCone(DrawList, HandlePos, Direction, Perp, SpeakerScale, ConeFillColor, RidgeColor);
 
         // The label doubles as the speaker's mute control - right next to
         // its handle, rather than in a separate list elsewhere in the UI.
@@ -179,15 +276,15 @@ bool DrawPositionDial(const char* Label, std::array<float, SpeakerCount>& Azimut
                                SpeakerLabels[i], SpeakerLabels[i]);
         }
 
-        const ImU32 LabelColor = bIsMuted        ? IM_COL32(235, 90, 90, 255)
+        const ImU32 LabelColor = bIsMuted        ? palette::Warning
                                   : bLabelHovered ? IM_COL32(255, 255, 255, 255)
-                                                  : IM_COL32(200, 205, 210, 255);
+                                                  : palette::TextSecondary;
         DrawList->AddText(LabelPos, LabelColor, SpeakerLabels[i]);
         if (bIsMuted)
         {
             const float StrikeY = LabelPos.y + LabelTextSize.y * 0.5f;
             DrawList->AddLine(ImVec2(LabelPos.x, StrikeY), ImVec2(LabelPos.x + LabelTextSize.x, StrikeY),
-                               IM_COL32(235, 90, 90, 255), 1.5f * Scale);
+                               palette::Warning, 1.5f * Scale);
         }
 
         ImGui::PopID();
@@ -198,6 +295,11 @@ bool DrawPositionDial(const char* Label, std::array<float, SpeakerCount>& Azimut
     ImGui::PopID();
 
     return bChanged;
+}
+
+const char* GetSpeakerLabel(size_t Index)
+{
+    return SpeakerLabels[Index];
 }
 
 } // namespace ramkolfx::gui

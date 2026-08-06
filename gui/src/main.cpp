@@ -16,14 +16,22 @@
 
 #include "app.hpp"
 #include "renderer.hpp"
+#include "ui_palette.hpp"
 
 namespace
 {
 
 // Base window/widget size the UI was designed at (100% / 96 DPI); every
-// other size the UI computes is this times DpiScale.
-constexpr int BaseWindowWidth = 420;
-constexpr int BaseWindowHeight = 480;
+// other size the UI computes is this times DpiScale. Sized to comfortably
+// fit the widest/tallest tab (the two-column Spatial Audio & Speakers tab,
+// and the Equalizer & Bass tab with advanced bass tuning + advanced band
+// editing both open) without needing a manual resize - see
+// ImGuiWindowFlags_AlwaysAutoResize in App::DrawUI(), which only autosizes
+// ImGui's own virtual window within this fixed OS-level window, not the
+// other way around. SDL_WINDOW_RESIZABLE (below) remains a manual escape
+// hatch for anything unusually wide (e.g. a long device/HRTF name).
+constexpr int BaseWindowWidth = 860;
+constexpr int BaseWindowHeight = 780;
 constexpr float BaseFontSizePixels = 13.0f; // ImGui's own default bake size
 
 // Picks a UI scale factor so the window and widgets read at a sane
@@ -60,6 +68,54 @@ float ResolveDpiScale()
     return Scale;
 }
 
+// Overrides the stock Dark theme's colors/rounding with the redesigned
+// palette (see ui_palette.hpp) so combos, buttons, and other stock ImGui
+// widgets read consistently with the custom-drawn pills/toggles/EQ bars
+// (ui_widgets.hpp, position_dial.hpp) rather than clashing with them.
+void ApplyPaletteStyle()
+{
+    using namespace ramkolfx::gui::palette;
+    ImGuiStyle& Style = ImGui::GetStyle();
+    ImVec4* Colors = Style.Colors;
+
+    Colors[ImGuiCol_WindowBg] = PageBgV4;
+    Colors[ImGuiCol_ChildBg] = PanelBgV4;
+    Colors[ImGuiCol_PopupBg] = NestedCardBgV4;
+    Colors[ImGuiCol_Border] = BorderV4;
+    Colors[ImGuiCol_Text] = TextPrimaryV4;
+    Colors[ImGuiCol_TextDisabled] = TextMutedV4;
+
+    Colors[ImGuiCol_FrameBg] = InputBgV4;
+    Colors[ImGuiCol_FrameBgHovered] = InputBgV4;
+    Colors[ImGuiCol_FrameBgActive] = InputBgV4;
+
+    Colors[ImGuiCol_Button] = InputBgV4;
+    Colors[ImGuiCol_ButtonHovered] = ImVec4(AccentSolidV4.x, AccentSolidV4.y, AccentSolidV4.z, 0.4f);
+    Colors[ImGuiCol_ButtonActive] = AccentGradientEndV4;
+
+    Colors[ImGuiCol_Header] = ImVec4(AccentSolidV4.x, AccentSolidV4.y, AccentSolidV4.z, 0.3f);
+    Colors[ImGuiCol_HeaderHovered] = ImVec4(AccentSolidV4.x, AccentSolidV4.y, AccentSolidV4.z, 0.45f);
+    Colors[ImGuiCol_HeaderActive] = AccentGradientEndV4;
+
+    Colors[ImGuiCol_CheckMark] = AccentSolidV4;
+    Colors[ImGuiCol_SliderGrab] = AccentSolidV4;
+    Colors[ImGuiCol_SliderGrabActive] = AccentHoverV4;
+
+    Colors[ImGuiCol_Tab] = InputBgV4;
+    Colors[ImGuiCol_TabHovered] = ImVec4(AccentSolidV4.x, AccentSolidV4.y, AccentSolidV4.z, 0.45f);
+    Colors[ImGuiCol_TabActive] = AccentGradientEndV4;
+    Colors[ImGuiCol_TabUnfocused] = InputBgV4;
+    Colors[ImGuiCol_TabUnfocusedActive] = AccentGradientEndV4;
+
+    Style.WindowRounding = RadiusTopCard;
+    Style.ChildRounding = RadiusNestedCard;
+    Style.FrameRounding = RadiusInput;
+    Style.PopupRounding = RadiusNestedCard;
+    Style.GrabRounding = RadiusInput;
+    Style.ScrollbarRounding = RadiusSmall;
+    Style.TabRounding = RadiusSmall;
+}
+
 } // namespace
 
 int main()
@@ -88,6 +144,7 @@ int main()
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
+    ApplyPaletteStyle();
     ImGui::GetStyle().ScaleAllSizes(DpiScale);
 
     ImFontConfig FontConfig;

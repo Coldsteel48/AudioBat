@@ -54,10 +54,27 @@ namespace ramkolfx::gui
 // counterpart's index when this happens this frame, -1 otherwise - the
 // caller should send its updated azimuth/distance to the daemon the same
 // way it does for *OutChangedIndex.
+//
+// When bTestNoiseEnabled is true, every currently-unmuted speaker's cone
+// pulses (opacity/scale animation) to indicate it's part of the test-noise
+// signal - purely cosmetic, driven by PulseTimeSeconds (a caller-owned
+// accumulator, so the animation phase survives across frames without this
+// widget needing any state of its own). Note that solo already works
+// today by muting every other speaker (see the caller's *OutSoloIndex
+// handling), so Muted[i] alone is always the correct "is this speaker
+// currently part of the mix" signal - no separate solo state needed here.
 bool DrawPositionDial(const char* Label, std::array<float, SpeakerCount>& AzimuthsDegrees,
                       std::array<float, SpeakerCount>& DistancesMeters,
                       const std::array<bool, SpeakerCount>& Muted, bool bMirrorEnabled,
                       int* OutChangedIndex, int* OutMirroredIndex, int* OutMuteToggledIndex,
-                      int* OutSoloIndex, float Scale = 1.0f);
+                      int* OutSoloIndex, float Scale = 1.0f, bool bTestNoiseEnabled = false,
+                      float PulseTimeSeconds = 0.0f);
+
+// Display label for speaker Index (0..SpeakerCount-1), in the same fixed
+// order DrawPositionDial uses (FL,FR,FC,RL,RR,SL,SR). Exported so callers
+// building their own per-speaker UI alongside the dial (e.g. an explicit
+// mute/solo button row) don't need to duplicate this array and risk it
+// drifting out of sync with the dial's own index order.
+const char* GetSpeakerLabel(size_t Index);
 
 } // namespace ramkolfx::gui
