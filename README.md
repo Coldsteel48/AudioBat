@@ -76,6 +76,18 @@ lock-free, callable from any thread) and over the control protocol
 `GetStatus` response) — the GUI's speaker dial drives this live, in
 whichever mode is active.
 
+## Screenshots
+
+> **Note:** the GUI is a convenience for exercising the daemon during
+> development, not a design target right now. Functionality — the DSP
+> pipeline, control protocol, and daemon behavior — is the priority; GUI
+> polish is explicitly out of scope until that's solid. What's shown below
+> is a work in progress, not a preview of a finished product.
+
+| Spatial Audio & Speakers | Equalizer & Bass |
+| --- | --- |
+| ![Spatial Audio & Speakers tab](docs/screenshots/spatial-audio-speakers.png) | ![Equalizer & Bass tab](docs/screenshots/equalizer-bass.png) |
+
 ## Architecture
 
 ```
