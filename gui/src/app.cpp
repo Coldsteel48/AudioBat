@@ -220,8 +220,13 @@ void App::DrawUI()
         ImGui::EndDisabled();
     }
 
-    ImGui::SameLine(0.0f, 17.0f * DpiScale); 
-    //ImGui::Dummy(ImVec2(0.0f, 20.0f * DpiScale)); 
+    ImGui::SameLine(0.0f, 24.0f);
+    //ImGui::Dummy(ImVec2(0.0f, 16.0f * DpiScale)); 
+    ImGui::Spacing();
+    ImGui::Spacing();
+    ImGui::Spacing();
+    ImGui::Spacing();
+    ImGui::Spacing();
 
     ImGui::End();
 }
