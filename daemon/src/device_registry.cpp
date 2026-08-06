@@ -72,6 +72,20 @@ const struct pw_core_events CoreEvents = []
     return Events;
 }();
 
+int OnMetadataProperty(void* UserData, uint32 Subject, const char* Key, const char* Type, const char* Value)
+{
+    static_cast<DeviceRegistry*>(UserData)->HandleMetadataProperty(Subject, Key, Type, Value);
+    return 0;
+}
+
+const struct pw_metadata_events MetadataEvents = []
+{
+    struct pw_metadata_events Events{};
+    Events.version = PW_VERSION_METADATA_EVENTS;
+    Events.property = OnMetadataProperty;
+    return Events;
+}();
+
 } // namespace
 
 DeviceRegistry::DeviceRegistry(pw_loop* InLoop) : Loop(InLoop)
@@ -82,6 +96,7 @@ DeviceRegistry::~DeviceRegistry()
 {
     if (DefaultMetadata)
     {
+        spa_hook_remove(&MetadataListener);
         pw_proxy_destroy(reinterpret_cast<pw_proxy*>(DefaultMetadata));
     }
     if (Registry)
@@ -166,6 +181,13 @@ void DeviceRegistry::HandleGlobalAdded(uint32 Id, const char* Type, const spa_di
                 pw_registry_bind(Registry, Id, Type, PW_VERSION_METADATA, 0));
             if (DefaultMetadata)
             {
+                // Must be added before ClaimVirtualSinkAsDefault() below: the
+                // server replays its current property set to a freshly-bound
+                // metadata object's listener before processing any further
+                // request on this connection, so HandleMetadataProperty sees
+                // the pre-existing default.configured.audio.sink (if any)
+                // ahead of our own overwrite.
+                pw_metadata_add_listener(DefaultMetadata, &MetadataListener, &MetadataEvents, this);
                 ClaimVirtualSinkAsDefault();
             }
         }
@@ -215,6 +237,60 @@ void DeviceRegistry::ClaimVirtualSinkAsDefault()
     std::snprintf(Value, sizeof(Value), "{ \"name\": \"%s\" }", VirtualSink::NodeName);
     pw_metadata_set_property(DefaultMetadata, PW_ID_CORE, "default.configured.audio.sink",
                               "Spa:String:JSON", Value);
+}
+
+void DeviceRegistry::HandleMetadataProperty(uint32 Subject, const char* Key, const char* Type, const char* Value)
+{
+    (void)Type;
+    if (bCapturedPreviousDefaultSink || Subject != PW_ID_CORE || !Key ||
+        std::strcmp(Key, "default.configured.audio.sink") != 0)
+    {
+        return;
+    }
+
+    // Only the first event matters - it's the server's dump of whatever was
+    // configured before we got here (see the doc comment on the listener
+    // registration in HandleGlobalAdded). A null Value means no default was
+    // configured at all; leave PreviousDefaultSinkValue empty so
+    // RestorePreviousDefaultSink() knows there's nothing to restore.
+    bCapturedPreviousDefaultSink = true;
+    if (Value)
+    {
+        PreviousDefaultSinkValue = Value;
+    }
+}
+
+void DeviceRegistry::RestorePreviousDefaultSink()
+{
+    if (!DefaultMetadata || !Core || PreviousDefaultSinkValue.empty())
+    {
+        return;
+    }
+
+    pw_metadata_set_property(DefaultMetadata, PW_ID_CORE, "default.configured.audio.sink",
+                              "Spa:String:JSON", PreviousDefaultSinkValue.c_str());
+
+    // The main loop has already stopped running by the time AudioEngine::
+    // Teardown() calls this, so nothing will otherwise flush the request
+    // above (or the property change event it triggers) before Teardown()
+    // goes on to destroy Core/Context right after. Pump a manual sync
+    // round-trip instead, same pattern as WaitForInitialSync.
+    CoreSyncState State;
+    spa_hook CoreListener{};
+    pw_core_add_listener(Core, &CoreListener, &CoreEvents, &State);
+    State.PendingSeq = pw_core_sync(Core, PW_ID_CORE, 0);
+
+    const auto Deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (!State.bDone && std::chrono::steady_clock::now() < Deadline)
+    {
+        pw_loop_iterate(Loop, 50);
+    }
+    spa_hook_remove(&CoreListener);
+
+    if (!State.bDone)
+    {
+        fprintf(stderr, "[ramkolfxd] timed out restoring previous default audio sink\n");
+    }
 }
 
 void DeviceRegistry::HandleGlobalRemoved(uint32 Id)

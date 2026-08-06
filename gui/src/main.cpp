@@ -30,8 +30,8 @@ namespace
 // ImGui's own virtual window within this fixed OS-level window, not the
 // other way around. SDL_WINDOW_RESIZABLE (below) remains a manual escape
 // hatch for anything unusually wide (e.g. a long device/HRTF name).
-constexpr int BaseWindowWidth = 900;
-constexpr int BaseWindowHeight = 900;
+constexpr int BaseWindowWidth = 1000;
+constexpr int BaseWindowHeight = 1000;
 constexpr float BaseFontSizePixels = 13.0f; // ImGui's own default bake size
 
 // Picks a UI scale factor so the window and widgets read at a sane

@@ -43,7 +43,10 @@ namespace ramkolfx
 // stream that got created before it had resolved a target and was
 // otherwise sitting unlinked (silently producing no sound) until
 // something touched that metadata, which is what manually opening a
-// system volume mixer was observed to fix.
+// system volume mixer was observed to fix. Whatever default was
+// configured beforehand is captured at the same time (see
+// HandleMetadataProperty) so RestorePreviousDefaultSink() can hand it
+// back to the system once the daemon shuts down.
 //
 // Registry events land on the PipeWire main-loop thread (the same thread
 // AudioEngine::Run() drives); GetDevices() is called from ControlServer's
@@ -89,6 +92,19 @@ public:
     void HandleGlobalAdded(uint32 Id, const char* Type, const spa_dict* Props);
     void HandleGlobalRemoved(uint32 Id);
 
+    // pw_metadata callback trampoline target; not for external use.
+    void HandleMetadataProperty(uint32 Subject, const char* Key, const char* Type, const char* Value);
+
+    // Sets default.configured.audio.sink back to whatever it was before
+    // ClaimVirtualSinkAsDefault() first overwrote it (captured via
+    // HandleMetadataProperty's initial property dump - see
+    // PreviousDefaultSinkValue). No-op if that value was never captured
+    // (e.g. the "default" metadata object never appeared). Must run while
+    // Core/DefaultMetadata are still alive, so callers need to invoke this
+    // before tearing this object down - AudioEngine::Teardown() does so
+    // explicitly, the same way it stops ControlServer before resetting it.
+    void RestorePreviousDefaultSink();
+
 private:
     // Sets default.configured.audio.sink to VirtualSink::NodeName via the
     // bound "default" metadata object. Called once, as soon as that
@@ -103,6 +119,16 @@ private:
     pw_registry* Registry = nullptr;
     spa_hook RegistryListener{};
     pw_metadata* DefaultMetadata = nullptr;
+    spa_hook MetadataListener{};
+
+    // The pre-existing default.configured.audio.sink value, captured from
+    // the first property event the "default" metadata object sends after
+    // ClaimVirtualSinkAsDefault()'s listener is added - which is the
+    // server's dump of current state, arriving before our own overwrite
+    // takes effect (bind and the following set_property are processed in
+    // order on the same connection). Empty/unset if never captured.
+    bool bCapturedPreviousDefaultSink = false;
+    std::string PreviousDefaultSinkValue;
 
     mutable std::mutex DevicesMutex;
     std::unordered_map<uint32, AudioDeviceInfo> DevicesById;

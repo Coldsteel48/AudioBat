@@ -34,20 +34,22 @@ constexpr ImU32 ToU32(ImVec4 C)
 }
 } // namespace detail
 
-// Backgrounds
-inline const ImVec4 PageBgV4 = detail::Rgba(0x0a, 0x0c, 0x10);
-inline const ImVec4 PanelBgV4 = detail::Rgba(0x12, 0x15, 0x1b);
-inline const ImVec4 NestedCardBgV4 = detail::Rgba(0x0d, 0x0f, 0x14);
-inline const ImVec4 InputBgV4 = detail::Rgba(0x17, 0x1b, 0x22);
-inline const ImVec4 ChipBgV4 = detail::Rgba(0x1a, 0x1e, 0x26);
+// Backgrounds - a notch brighter than the design reference's literal
+// tokens (see the handoff README's "Fidelity" note: colors are meant to be
+// steered, not hardcoded) so the panel doesn't read as near-black.
+inline const ImVec4 PageBgV4 = detail::Rgba(0x0e, 0x10, 0x14);
+inline const ImVec4 PanelBgV4 = detail::Rgba(0x16, 0x19, 0x1f);
+inline const ImVec4 NestedCardBgV4 = detail::Rgba(0x11, 0x13, 0x18);
+inline const ImVec4 InputBgV4 = detail::Rgba(0x1b, 0x1f, 0x26);
+inline const ImVec4 ChipBgV4 = detail::Rgba(0x1e, 0x22, 0x2a);
 
 // Borders
-inline const ImVec4 BorderV4 = detail::Rgba(255, 255, 255, 0.08f);
+inline const ImVec4 BorderV4 = detail::Rgba(255, 255, 255, 0.10f);
 
 // Text
 inline const ImVec4 TextPrimaryV4 = detail::Rgba(0xee, 0xf2, 0xf7);
-inline const ImVec4 TextSecondaryV4 = detail::Rgba(0x9a, 0xa3, 0xb2);
-inline const ImVec4 TextMutedV4 = detail::Rgba(0x5b, 0x64, 0x72);
+inline const ImVec4 TextSecondaryV4 = detail::Rgba(0xa0, 0xa9, 0xb8);
+inline const ImVec4 TextMutedV4 = detail::Rgba(0x63, 0x6c, 0x7a);
 
 // Accent
 inline const ImVec4 AccentGradientStartV4 = detail::Rgba(0x35, 0xc7, 0xff);

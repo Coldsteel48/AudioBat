@@ -484,6 +484,10 @@ void AudioEngine::Teardown()
         Server->Stop();
         Server.reset();
     }
+    if (Devices)
+    {
+        Devices->RestorePreviousDefaultSink();
+    }
     Devices.reset();
     Output.reset();
     Sink.reset();
