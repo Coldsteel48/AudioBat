@@ -29,7 +29,7 @@ constexpr float PositionSendIntervalSeconds = 0.03f; // ~33 Hz cap while draggin
 // constants - kept in one place so the CardScope padding values used when
 // constructing a card and the width math that right-aligns content within
 // it (see DrawSpatialTab/DrawEqTab's TabContentWidth) can't drift apart.
-constexpr float PanelPadding = 20.0f; // outer panel CardScope's own padding
+constexpr float PanelPadding = 16.0f; // outer panel CardScope's own padding
 constexpr float BassCardPadding = 14.0f; // Bass Enhancer CardScope's own padding
 constexpr float ColumnGap = 22.0f; // gap between the spatial tab's two columns
 } // namespace
@@ -219,6 +219,9 @@ void App::DrawUI()
         }
         ImGui::EndDisabled();
     }
+
+    ImGui::SameLine(0.0f, 17.0f * DpiScale); 
+    //ImGui::Dummy(ImVec2(0.0f, 20.0f * DpiScale)); 
 
     ImGui::End();
 }

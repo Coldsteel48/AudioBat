@@ -31,7 +31,7 @@ namespace
 // other way around. SDL_WINDOW_RESIZABLE (below) remains a manual escape
 // hatch for anything unusually wide (e.g. a long device/HRTF name).
 constexpr int BaseWindowWidth = 860;
-constexpr int BaseWindowHeight = 780;
+constexpr int BaseWindowHeight = 900;
 constexpr float BaseFontSizePixels = 13.0f; // ImGui's own default bake size
 
 // Picks a UI scale factor so the window and widgets read at a sane
@@ -108,6 +108,7 @@ void ApplyPaletteStyle()
     Colors[ImGuiCol_TabUnfocusedActive] = AccentGradientEndV4;
 
     Style.WindowRounding = RadiusTopCard;
+    Style.WindowPadding = ImVec2(20.0f, 20.0f);
     Style.ChildRounding = RadiusNestedCard;
     Style.FrameRounding = RadiusInput;
     Style.PopupRounding = RadiusNestedCard;
