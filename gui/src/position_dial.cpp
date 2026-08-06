@@ -19,7 +19,6 @@ namespace ramkolfx::gui
 
 namespace
 {
-constexpr float DialSize = 220.0f;
 constexpr float HandleRadius = 9.0f;
 constexpr float Pi = 3.14159265358979323846f;
 constexpr const char* SpeakerLabels[SpeakerCount] = {"FL", "FR", "FC", "RL", "RR", "SL", "SR"};
@@ -143,7 +142,7 @@ bool DrawPositionDial(const char* Label, std::array<float, SpeakerCount>& Azimut
     *OutMuteToggledIndex = -1;
     *OutSoloIndex = -1;
 
-    const float ScaledDialSize = DialSize * Scale;
+    const float ScaledDialSize = PositionDialSize * Scale;
     const float ScaledHandleRadius = HandleRadius * Scale;
 
     ImGui::PushID(Label);

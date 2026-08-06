@@ -39,6 +39,7 @@ inline const ImVec4 PageBgV4 = detail::Rgba(0x0a, 0x0c, 0x10);
 inline const ImVec4 PanelBgV4 = detail::Rgba(0x12, 0x15, 0x1b);
 inline const ImVec4 NestedCardBgV4 = detail::Rgba(0x0d, 0x0f, 0x14);
 inline const ImVec4 InputBgV4 = detail::Rgba(0x17, 0x1b, 0x22);
+inline const ImVec4 ChipBgV4 = detail::Rgba(0x1a, 0x1e, 0x26);
 
 // Borders
 inline const ImVec4 BorderV4 = detail::Rgba(255, 255, 255, 0.08f);
@@ -63,6 +64,7 @@ inline const ImU32 PageBg = detail::ToU32(PageBgV4);
 inline const ImU32 PanelBg = detail::ToU32(PanelBgV4);
 inline const ImU32 NestedCardBg = detail::ToU32(NestedCardBgV4);
 inline const ImU32 InputBg = detail::ToU32(InputBgV4);
+inline const ImU32 ChipBg = detail::ToU32(ChipBgV4);
 inline const ImU32 Border = detail::ToU32(BorderV4);
 inline const ImU32 TextPrimary = detail::ToU32(TextPrimaryV4);
 inline const ImU32 TextSecondary = detail::ToU32(TextSecondaryV4);

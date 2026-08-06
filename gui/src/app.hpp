@@ -23,8 +23,13 @@ namespace ramkolfx::gui
 class App
 {
 public:
-    explicit App(float InDpiScale)
-        : DpiScale(InDpiScale), bMirrorModeEnabled(LoadGuiPreferences().bMirrorModeEnabled),
+    // InTargetContentWidth is how wide (in already-DPI-scaled screen
+    // pixels) both tabs' content should target - see the comment at its
+    // computation in main.cpp for why it has to come from the fixed OS
+    // window size rather than be measured live via ImGui.
+    App(float InDpiScale, float InTargetContentWidth)
+        : DpiScale(InDpiScale), TargetContentWidth(InTargetContentWidth),
+          bMirrorModeEnabled(LoadGuiPreferences().bMirrorModeEnabled),
           bAdvancedEqMode(LoadGuiPreferences().bAdvancedEqMode),
           bAdvancedBassMode(LoadGuiPreferences().bAdvancedBassMode),
           ActiveTabIndex(LoadGuiPreferences().ActiveTabIndex)
@@ -45,6 +50,11 @@ private:
     void PersistGuiPreferences() const;
 
     float DpiScale = 1.0f;
+
+    // Fixed target width (already DPI-scaled) both DrawSpatialTab() and
+    // DrawEqTab() lay their content out to, so the two tabs read as the
+    // same size - see the constructor comment and main.cpp's computation.
+    float TargetContentWidth = 0.0f;
 
     ControlClient Client;
     Status LastStatus;

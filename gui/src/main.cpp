@@ -159,7 +159,18 @@ int main()
         return 1;
     }
 
-    ramkolfx::gui::App App(DpiScale);
+    // The width both tabs target so they read as the same size - derived
+    // from the same fixed BaseWindowWidth that sizes the OS window itself
+    // (minus the window's own left+right padding), not from ImGui's
+    // GetContentRegionAvail() at runtime: for an AlwaysAutoResize window,
+    // that value is self-referential (it tracks whatever content the
+    // window's own size last converged to), so two tabs with different
+    // natural content widths converge to two different steady-state
+    // values even though the OS-level window is a fixed physical size -
+    // querying it live would just reintroduce that per-tab drift.
+    const float TargetContentWidth = BaseWindowWidth * DpiScale - ImGui::GetStyle().WindowPadding.x * 2.0f;
+
+    ramkolfx::gui::App App(DpiScale, TargetContentWidth);
 
     bool bQuit = false;
     Uint64 LastFrameTicks = SDL_GetPerformanceCounter();

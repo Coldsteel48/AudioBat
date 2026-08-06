@@ -15,6 +15,13 @@
 namespace ramkolfx::gui
 {
 
+// Unscaled diameter DrawPositionDial draws itself at (multiply by the
+// Scale passed to it for actual pixels) - exported so a caller that wants
+// to draw its own background behind the dial (e.g. a card matching the
+// reference design's dark radar panel) can size it without duplicating
+// this number.
+inline constexpr float PositionDialSize = 260.0f;
+
 // Draws a top-down dial with one draggable handle per virtual 7.1 speaker
 // (order: FL,FR,FC,RL,RR,SL,SR, matching AmbisonicsStage::SpeakerChannel
 // and Status::SpeakerAzimuthDegrees/SpeakerDistanceMeters). A handle's

@@ -18,7 +18,6 @@ namespace ramkolfx::gui
 
 namespace
 {
-constexpr float ToggleTrackWidth = 38.0f;
 constexpr float ToggleTrackHeight = 21.0f;
 constexpr float ToggleKnobDiameter = 17.0f;
 constexpr float ToggleKnobMargin = 2.0f;
@@ -221,6 +220,44 @@ bool DrawEqBandBar(const char* Label, float* GainDb, float MinDb, float MaxDb, I
     ImGui::PopID();
 
     return bChanged;
+}
+
+void RightAlignCursor(float RowStartX, float RowWidth, float ItemWidth)
+{
+    ImGui::SetCursorScreenPos(ImVec2(RowStartX + RowWidth - ItemWidth, ImGui::GetCursorScreenPos().y));
+}
+
+CardScope::CardScope(ImU32 InBgColor, float InRounding, ImVec2 InPadding)
+    : DrawList(ImGui::GetWindowDrawList()), BgColor(InBgColor), Rounding(InRounding), Padding(InPadding)
+{
+    Splitter.Split(DrawList, 2);
+    Splitter.SetCurrentChannel(DrawList, 1); // content draws on the foreground channel
+
+    // Position via an explicit screen-space cursor jump, not
+    // ImGui::Indent()/Dummy() - Indent() mutates window-level state
+    // (the baseline X every later NewLine()/SameLine() in the *whole
+    // window* measures from until Unindent()), which misbehaves when a
+    // caller nests CardScope inside a tight SameLine() loop (e.g. a row
+    // of chips) - same class of "don't rely on window-relative layout
+    // state across a group boundary" issue DrawSpatialTab's own
+    // left/right column split ran into. Explicit positions sidestep it
+    // entirely, same as DrawPositionDial's own SetCursorScreenPos usage.
+    Origin = ImGui::GetCursorScreenPos();
+    ImGui::SetCursorScreenPos(ImVec2(Origin.x + Padding.x, Origin.y + Padding.y));
+    ImGui::BeginGroup();
+}
+
+CardScope::~CardScope()
+{
+    ImGui::EndGroup();
+    const ImVec2 ContentMin = ImGui::GetItemRectMin();
+    const ImVec2 ContentMax = ImGui::GetItemRectMax();
+    ImGui::SetCursorScreenPos(ImVec2(Origin.x, ContentMax.y + Padding.y));
+
+    Splitter.SetCurrentChannel(DrawList, 0); // background channel, drawn behind channel 1 on merge
+    DrawList->AddRectFilled(ImVec2(ContentMin.x - Padding.x, ContentMin.y - Padding.y),
+                            ImVec2(ContentMax.x + Padding.x, ContentMax.y + Padding.y), BgColor, Rounding);
+    Splitter.Merge(DrawList);
 }
 
 } // namespace ramkolfx::gui
