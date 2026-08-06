@@ -31,6 +31,11 @@ struct GuiPreferences
     // Purely a display choice, same reasoning as bAdvancedEqMode - see
     // protocol.hpp's BassEnhancerSettings.
     bool bAdvancedBassMode = false;
+
+    // Which of the two top-level tabs (0 = Spatial Audio & Speakers, 1 =
+    // Equalizer & Bass) was showing when the GUI last closed - purely a
+    // local UX convenience, never sent to the daemon.
+    int ActiveTabIndex = 0;
 };
 
 // Reads $XDG_CONFIG_HOME/ramkolfx/gui_prefs.conf (falling back to

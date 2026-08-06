@@ -23,10 +23,16 @@ namespace ramkolfx::gui
 class App
 {
 public:
-    explicit App(float InDpiScale)
-        : DpiScale(InDpiScale), bMirrorModeEnabled(LoadGuiPreferences().bMirrorModeEnabled),
+    // InTargetContentWidth is how wide (in already-DPI-scaled screen
+    // pixels) both tabs' content should target - see the comment at its
+    // computation in main.cpp for why it has to come from the fixed OS
+    // window size rather than be measured live via ImGui.
+    App(float InDpiScale, float InTargetContentWidth)
+        : DpiScale(InDpiScale), TargetContentWidth(InTargetContentWidth),
+          bMirrorModeEnabled(LoadGuiPreferences().bMirrorModeEnabled),
           bAdvancedEqMode(LoadGuiPreferences().bAdvancedEqMode),
-          bAdvancedBassMode(LoadGuiPreferences().bAdvancedBassMode)
+          bAdvancedBassMode(LoadGuiPreferences().bAdvancedBassMode),
+          ActiveTabIndex(LoadGuiPreferences().ActiveTabIndex)
     {
     }
 
@@ -34,8 +40,21 @@ public:
 
 private:
     void DrawUI();
+    void DrawSpatialTab();
+    void DrawEqTab();
+
+    // Writes every local-only GUI preference field to gui_prefs.hpp in one
+    // call - used everywhere a preference-backed toggle changes, so no
+    // call site can accidentally reset a sibling field to its default the
+    // way constructing a partial GuiPreferences{} inline used to risk.
+    void PersistGuiPreferences() const;
 
     float DpiScale = 1.0f;
+
+    // Fixed target width (already DPI-scaled) both DrawSpatialTab() and
+    // DrawEqTab() lay their content out to, so the two tabs read as the
+    // same size - see the constructor comment and main.cpp's computation.
+    float TargetContentWidth = 0.0f;
 
     ControlClient Client;
     Status LastStatus;
@@ -87,6 +106,19 @@ private:
     // local-only UX toggle, persisted via gui_prefs.hpp same as
     // bAdvancedEqMode.
     bool bAdvancedBassMode = false;
+
+    // Which top-level tab (0 = Spatial Audio & Speakers, 1 = Equalizer &
+    // Bass) is currently showing - only one tab's DrawXxxTab() runs per
+    // frame, so the AlwaysAutoResize window only ever measures whichever
+    // tab is active, same as before this tab split existed. Persisted via
+    // gui_prefs.hpp same as the other local-only UX toggles above.
+    int ActiveTabIndex = 0;
+
+    // Accumulated while LastStatus.bTestNoiseEnabled is true (reset to 0
+    // otherwise, so the animation phase always restarts cleanly); drives
+    // the speaker dial's test-noise pulse animation. Purely cosmetic - see
+    // DrawPositionDial's PulseTimeSeconds parameter.
+    float TestNoisePulseTimeSeconds = 0.0f;
 };
 
 } // namespace ramkolfx::gui

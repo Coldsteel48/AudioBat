@@ -15,6 +15,13 @@
 namespace ramkolfx::gui
 {
 
+// Unscaled diameter DrawPositionDial draws itself at (multiply by the
+// Scale passed to it for actual pixels) - exported so a caller that wants
+// to draw its own background behind the dial (e.g. a card matching the
+// reference design's dark radar panel) can size it without duplicating
+// this number.
+inline constexpr float PositionDialSize = 260.0f;
+
 // Draws a top-down dial with one draggable handle per virtual 7.1 speaker
 // (order: FL,FR,FC,RL,RR,SL,SR, matching AmbisonicsStage::SpeakerChannel
 // and Status::SpeakerAzimuthDegrees/SpeakerDistanceMeters). A handle's
@@ -54,10 +61,27 @@ namespace ramkolfx::gui
 // counterpart's index when this happens this frame, -1 otherwise - the
 // caller should send its updated azimuth/distance to the daemon the same
 // way it does for *OutChangedIndex.
+//
+// When bTestNoiseEnabled is true, every currently-unmuted speaker's cone
+// pulses (opacity/scale animation) to indicate it's part of the test-noise
+// signal - purely cosmetic, driven by PulseTimeSeconds (a caller-owned
+// accumulator, so the animation phase survives across frames without this
+// widget needing any state of its own). Note that solo already works
+// today by muting every other speaker (see the caller's *OutSoloIndex
+// handling), so Muted[i] alone is always the correct "is this speaker
+// currently part of the mix" signal - no separate solo state needed here.
 bool DrawPositionDial(const char* Label, std::array<float, SpeakerCount>& AzimuthsDegrees,
                       std::array<float, SpeakerCount>& DistancesMeters,
                       const std::array<bool, SpeakerCount>& Muted, bool bMirrorEnabled,
                       int* OutChangedIndex, int* OutMirroredIndex, int* OutMuteToggledIndex,
-                      int* OutSoloIndex, float Scale = 1.0f);
+                      int* OutSoloIndex, float Scale = 1.0f, bool bTestNoiseEnabled = false,
+                      float PulseTimeSeconds = 0.0f);
+
+// Display label for speaker Index (0..SpeakerCount-1), in the same fixed
+// order DrawPositionDial uses (FL,FR,FC,RL,RR,SL,SR). Exported so callers
+// building their own per-speaker UI alongside the dial (e.g. an explicit
+// mute/solo button row) don't need to duplicate this array and risk it
+// drifting out of sync with the dial's own index order.
+const char* GetSpeakerLabel(size_t Index);
 
 } // namespace ramkolfx::gui

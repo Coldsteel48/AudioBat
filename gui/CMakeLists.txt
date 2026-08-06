@@ -49,6 +49,7 @@ add_executable(ramkolfx-gui
     src/gui_prefs.cpp
     src/position_dial.cpp
     src/renderer_opengl3.cpp
+    src/ui_widgets.cpp
 )
 
 target_link_libraries(ramkolfx-gui PRIVATE

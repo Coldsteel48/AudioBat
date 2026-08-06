@@ -81,6 +81,10 @@ GuiPreferences LoadGuiPreferences()
     {
         Result.bAdvancedBassMode = It->second == "1";
     }
+    if (const auto It = Fields.find("active_tab_index"); It != Fields.end())
+    {
+        Result.ActiveTabIndex = It->second == "1" ? 1 : 0;
+    }
     return Result;
 }
 
@@ -101,6 +105,7 @@ void SaveGuiPreferences(const GuiPreferences& InPreferences)
     File << "mirror_left_right=" << (InPreferences.bMirrorModeEnabled ? 1 : 0) << "\n";
     File << "advanced_eq_mode=" << (InPreferences.bAdvancedEqMode ? 1 : 0) << "\n";
     File << "advanced_bass_mode=" << (InPreferences.bAdvancedBassMode ? 1 : 0) << "\n";
+    File << "active_tab_index=" << InPreferences.ActiveTabIndex << "\n";
     File.close();
 
     if (std::rename(TempPath.c_str(), Path.c_str()) != 0)

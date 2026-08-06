@@ -57,6 +57,18 @@ All three modes sit behind the same `DspStage` interface and share one
 live-repositionable `SpeakerLayout`, so speaker position changes apply
 no matter which mode is active.
 
+A 10-band graphic EQ (`HwEqStage`, `GraphicEqFilter`) and a psychoacoustic
+bass enhancer (`BassEnhancerStage`, `BassEnhancerFilter`) sit downstream of
+the spatial stage, live-adjustable per-band from the GUI's "Equalizer &
+Bass" tab (`SetHwEqBand` / `SetBassEnhancer` opcodes) and included in every
+`GetStatus` response, same as spatial mode and speaker azimuths. The
+protocol already has opcodes for named per-device/per-app EQ presets
+(`SetHwEqPreset`, `SaveHwEqPreset`, `SetContentEqBand`, `SetContentEqPreset`,
+`SaveContentEqPreset`, `GetEqPresetCatalog`, `GetContentStreams`) decoded on
+the daemon side, but there's no handler or GUI for them yet — the
+Equalizer tab renders disabled placeholder cards for device/app presets and
+a "Genre auto-detect" row in their place.
+
 Virtual speaker positions are live-repositionable both at the
 `SpeakerLayout` API level (`SetSpeakerAzimuth`/`GetSpeakerAzimuth`,
 lock-free, callable from any thread) and over the control protocol
@@ -92,9 +104,11 @@ whichever mode is active.
   sink (selectable live via the control protocol/GUI, not "whatever is
   currently default").
 - The **GUI control app** (`ramkolfx-gui`, Dear ImGui + SDL2/OpenGL3) talks
-  to the daemon over the Unix domain socket to switch spatial mode and
-  reposition virtual speakers live, and (later) manage EQ — all in real
-  time, without restarting the daemon.
+  to the daemon over the Unix domain socket to switch spatial mode,
+  reposition virtual speakers, and adjust the 10-band EQ and bass
+  enhancer live — all in real time, without restarting the daemon. It's
+  organized into two tabs ("Spatial Audio & Speakers" and "Equalizer &
+  Bass").
 
 ## Directory layout
 
@@ -104,7 +118,9 @@ whichever mode is active.
   socket server.
 - `gui/` — `ramkolfx-gui`: Dear ImGui + SDL2/OpenGL3 control app (build with
   `-DRAMKOLFX_BUILD_GUI=ON`). Talks to the daemon only over the Unix
-  control socket — no PipeWire dependency.
+  control socket — no PipeWire dependency. Tabbed layout: spatial
+  mode/speakers/HRTF/output device on one tab, 10-band EQ and bass
+  enhancer on the other.
 - `docs/` — reserved for design notes as the DSP work lands.
 
 ## Engineering approach
@@ -264,9 +280,14 @@ file outside the catalog entirely.
 3. ~~Real-time repositionable virtual speakers: control-protocol opcode + GUI dial~~
 4. ~~HRTF-based binaural decode (libmysofa + KissFFT), selectable as the "Advanced" `SpatialMode` alongside algebraic ambisonics~~
 5. ~~Switchable HRTF catalog (MIT KEMAR + 8 SADIE II subjects + a license-free synthetic spherical-head model) with live, crossfaded switching via `HrtfDeck` and the GUI's HRTF dropdown~~
-6. Parametric EQ
-7. ONNX-based automatic EQ preset selection
-8. GUI polish aimed at non-audio-engineer users (v1 ships spatial mode dropdown + speaker dial only)
+6. ~~Parametric EQ: 10-band graphic EQ + psychoacoustic bass enhancer, both live-adjustable from the GUI's Equalizer & Bass tab~~
+7. Named per-device/per-app EQ presets (protocol opcodes decoded on the
+   daemon already; no handler or GUI yet — currently disabled placeholders)
+8. ONNX-based automatic EQ preset selection / genre auto-detect (also a
+   disabled placeholder in the GUI today)
+9. GUI polish aimed at non-audio-engineer users — two-tab layout
+   (Spatial Audio & Speakers / Equalizer & Bass) has landed; ongoing
+   refinement (current branch: `feature/gui-redesign`)
 
 ## License
 
