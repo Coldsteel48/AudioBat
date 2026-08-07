@@ -50,17 +50,28 @@ configure_file(
 )
 
 # Full switchable HRTF catalog (see data/hrtf/README.md): the bundled MIT
-# KEMAR default, the bundled SADIE II subjects (Apache-2.0, safe to
-# redistribute - unlike the CIPIC/ARI/Listen mirrors this project
-# deliberately avoids bundling), and the license-free synthetic
-# spherical-head model. AudioEngine filters this list down to entries
-# that are actually present on disk at startup.
+# KEMAR default, the bundled SADIE II / HUTUBS / SONICOM subjects
+# (Apache-2.0 / CC BY 4.0 / MIT respectively, all safe to redistribute -
+# unlike the CIPIC/ARI/Listen/Aachen mirrors this project deliberately
+# avoids bundling), and the license-free synthetic spherical-head model.
+# AudioEngine filters this list down to entries that are actually present
+# on disk at startup.
 set(RAMKOLFX_HRTF_CATALOG_ENTRIES
     "    { \"MIT KEMAR (normal pinna)\", HrtfSourceKind::SofaFile, \"${CMAKE_SOURCE_DIR}/data/hrtf/default.sofa\" },\n")
-set(RAMKOLFX_SADIE_SUBJECTS H3 H5 H8 H10 H13 H15 H18 H20)
+set(RAMKOLFX_SADIE_SUBJECTS D1 D2 H3 H4 H5 H6 H7 H8 H9 H10 H11 H12 H13 H14 H15 H16 H17 H18 H19 H20)
 foreach(SUBJECT ${RAMKOLFX_SADIE_SUBJECTS})
     string(APPEND RAMKOLFX_HRTF_CATALOG_ENTRIES
         "    { \"SADIE II - ${SUBJECT}\", HrtfSourceKind::SofaFile, \"${CMAKE_SOURCE_DIR}/data/hrtf/sadie/sadie_${SUBJECT}.sofa\" },\n")
+endforeach()
+set(RAMKOLFX_HUTUBS_SUBJECTS pp5 pp30 pp50 pp70 pp90)
+foreach(SUBJECT ${RAMKOLFX_HUTUBS_SUBJECTS})
+    string(APPEND RAMKOLFX_HRTF_CATALOG_ENTRIES
+        "    { \"HUTUBS - ${SUBJECT}\", HrtfSourceKind::SofaFile, \"${CMAKE_SOURCE_DIR}/data/hrtf/hutubs/hutubs_${SUBJECT}.sofa\" },\n")
+endforeach()
+set(RAMKOLFX_SONICOM_SUBJECTS P0002 P0057 P0102 P0201 P0301)
+foreach(SUBJECT ${RAMKOLFX_SONICOM_SUBJECTS})
+    string(APPEND RAMKOLFX_HRTF_CATALOG_ENTRIES
+        "    { \"SONICOM - ${SUBJECT}\", HrtfSourceKind::SofaFile, \"${CMAKE_SOURCE_DIR}/data/hrtf/sonicom/sonicom_${SUBJECT}.sofa\" },\n")
 endforeach()
 string(APPEND RAMKOLFX_HRTF_CATALOG_ENTRIES
     "    { \"Synthetic spherical head\", HrtfSourceKind::SyntheticSphericalHead, \"\" },\n")

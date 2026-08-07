@@ -40,9 +40,11 @@ three genuinely different signal paths (`SpatialMode`: `Off` / `Basic` /
   restarting the daemon, crossfading between old and new over a fixed
   ~50ms window so switching never clicks. The bundled catalog
   (`GetHrtfCatalog`, see `data/hrtf/README.md`) is the MIT KEMAR default,
-  8 individual subjects from the SADIE II database (Apache-2.0, safe to
-  redistribute commercially — the CIPIC/ARI/Listen mirrors were
-  deliberately avoided for exactly that reason), and the synthetic model.
+  the full 20-entry SADIE II database (Apache-2.0), 5 subjects from
+  HUTUBS (CC BY 4.0), 5 subjects from SONICOM (MIT), and the synthetic
+  model — all permissively licensed and safe to redistribute
+  commercially, unlike the CIPIC/ARI/Listen/RWTH Aachen mirrors, which
+  were deliberately avoided for exactly that reason.
   The daemon also watches a user-writable directory
   (`$XDG_CONFIG_HOME/ramkolfx/hrtf` by default, or `RAMKOLFX_HRTF_DIR`)
   and appends any `.sofa` files found there to the catalog, prefixed
@@ -264,9 +266,10 @@ virtual sink it just claimed.
 
 ## Adding your own SOFA files
 
-Beyond the bundled catalog (MIT KEMAR + 8 SADIE II subjects + the
-synthetic model, see `data/hrtf/README.md`), you can add your own HRTF
-measurements — CIPIC, ARI, Listen, or your own — without rebuilding:
+Beyond the bundled catalog (MIT KEMAR + full SADIE II (20) + HUTUBS (5)
++ SONICOM (5) + the synthetic model, see `data/hrtf/README.md`), you can
+add your own HRTF measurements — CIPIC, ARI, Listen, or your own —
+without rebuilding:
 
 1. Drop the `.sofa` file into `$XDG_CONFIG_HOME/ramkolfx/hrtf` (falls
    back to `~/.config/ramkolfx/hrtf`, created automatically on first
@@ -291,7 +294,7 @@ file outside the catalog entirely.
 2. ~~One-click 3D on/off toggle: wired end-to-end and now audibly meaningful (PassthroughStage vs AmbisonicsStage)~~
 3. ~~Real-time repositionable virtual speakers: control-protocol opcode + GUI dial~~
 4. ~~HRTF-based binaural decode (libmysofa + KissFFT), selectable as the "Advanced" `SpatialMode` alongside algebraic ambisonics~~
-5. ~~Switchable HRTF catalog (MIT KEMAR + 8 SADIE II subjects + a license-free synthetic spherical-head model) with live, crossfaded switching via `HrtfDeck` and the GUI's HRTF dropdown~~
+5. ~~Switchable HRTF catalog (MIT KEMAR + full SADIE II/HUTUBS/SONICOM databases + a license-free synthetic spherical-head model) with live, crossfaded switching via `HrtfDeck` and the GUI's HRTF dropdown~~
 6. ~~Parametric EQ: 10-band graphic EQ + psychoacoustic bass enhancer, both live-adjustable from the GUI's Equalizer & Bass tab~~
 7. Named per-device/per-app EQ presets (protocol opcodes decoded on the
    daemon already; no handler or GUI yet — currently disabled placeholders)

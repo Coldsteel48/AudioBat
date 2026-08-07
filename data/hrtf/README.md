@@ -3,9 +3,12 @@
 Advanced spatial mode (`BinauralStage`) can render through any of several
 HRTF sources, selectable live from the GUI's HRTF dropdown (or the
 `SetHrtfFile` control opcode) without restarting the daemon. Every entry
-listed here is either public domain or permissively (Apache-2.0)
-licensed, safe to redistribute including in commercial builds — no
-"free for research only" datasets are bundled.
+listed here is either public domain or permissively (Apache-2.0, CC BY
+4.0, or MIT) licensed, safe to redistribute including in commercial
+builds — no "free for research only" datasets are bundled. (Databases
+considered and rejected for that reason, beyond the classics like CIPIC/
+ARI/Listen/RIEC: the RWTH Aachen HRTF database, which is CC BY-NC-SA 4.0
+and explicitly prohibits commercial exploitation.)
 
 ## `default.sofa` — MIT KEMAR "normal pinna" (catalog index 0, default)
 
@@ -22,11 +25,11 @@ This is the default HRTF source when the `RAMKOLFX_HRTF_SOFA` environment
 variable isn't set and no other catalog entry has been selected via the
 control protocol.
 
-## `sadie/sadie_H*.sofa` — SADIE II database (8 subjects)
+## `sadie/sadie_*.sofa` — SADIE II database (full set: 18 human subjects + 2 dummy heads)
 
-Eight individual human subjects (H3, H5, H8, H10, H13, H15, H18, H20)
-from the SADIE II HRTF database, University of York:
-<https://www.york.ac.uk/sadie-project/database.html>
+All 20 entries from the SADIE II HRTF database, University of York:
+<https://www.york.ac.uk/sadie-project/database.html> — human subjects H3
+through H20, plus dummy-head rigs D1 (KEMAR) and D2 (B&K Type 4128C).
 
 Source: Zenodo record <https://zenodo.org/records/12092466>
 (`<ID>_HRIR_SOFA.zip`, `<ID>_48K_24bit_256tap_FIR_SOFA.sofa` member
@@ -46,9 +49,67 @@ DOI: 10.3390/app8112029.
 
 Human HRTF perception is highly ear-shape-specific — a dataset that
 externalizes well for one listener may sound like plain stereo panning
-for another. These 8 subjects exist so a user can try several and keep
-whichever their own ears respond to, rather than being stuck with one
-generic dummy-head measurement.
+for another. These 18 human subjects exist so a user can try several and
+keep whichever their own ears respond to, rather than being stuck with
+one generic dummy-head measurement. D1/D2 are included alongside them as
+two more (non-individual) dummy-head options, in the same spirit as the
+MIT KEMAR default.
+
+## `hutubs/hutubs_pp*.sofa` — HUTUBS database (5 subjects)
+
+Five individual human subjects (pp5, pp30, pp50, pp70, pp90) from the
+HUTUBS HRTF database, Technical University of Berlin:
+<https://depositonce.tu-berlin.de/items/dc2a3076-a291-417e-97f0-7697e332c960>
+(DOI: 10.14279/depositonce-8487)
+
+Source: the `HRIRs.zip` bitstream on that record, `pp<N>_HRIRs_measured.sofa`
+member extracted per subject (the acoustically-measured HRIRs, not the
+numerically-simulated ones also present in that archive). The database
+has 96 subject slots in total; pp1/pp96 are repeated measurements of the
+FABIAN head-and-torso simulator and pp22/pp88 are a repeated human
+subject, so the five picked here are five distinct people.
+
+**License: CC BY 4.0** (full text bundled at `hutubs/LICENSE.txt`, fetched
+from creativecommons.org). Confirmed directly from the database's own
+documentation PDF and DSpace `dc.rights.uri` metadata: "The data is
+provided under the free culture CC BY license that grants unlimited
+access for everyone." Redistribution requires attribution, which
+`LICENSE.txt` plus this citation satisfies.
+
+**Citation** (required whenever this data is used): F. Brinkmann, M.
+Dinakaran, R. Pelzer, P. Grosche, D. Voss, and S. Weinzierl, "A
+Cross-Evaluated Database of Measured and Simulated HRTFs Including 3D
+Head Meshes, Anthropometric Features, and Headphone Impulse Responses,"
+J. Audio Eng. Soc. DOI: 10.14279/depositonce-8487.
+
+## `sonicom/sonicom_P*.sofa` — SONICOM database (5 subjects)
+
+Five individual human subjects (P0002, P0057, P0102, P0201, P0301) from
+the SONICOM HRTF Dataset, Audio Experience Design, Imperial College
+London: <https://www.axdesign.co.uk/tools-and-devices/sonicom-hrtf-dataset>
+
+Source: `<ID>/HRTF/HRTF/48kHz/<ID>_FreeFieldComp_48kHz.sofa` from the
+dataset's own file server at
+<https://transfer.ic.ac.uk:9090/#/2022_SONICOM-HRTF-DATASET/> — the
+free-field-compensated, windowed, 48kHz variant with ITD intact (matches
+RamkolFX's fixed 48kHz pipeline rate and is the directly-comparable
+counterpart to the SADIE II files above). This is currently the largest
+publicly available HRTF dataset (300+ subjects and growing).
+
+**License: MIT** (bundled at `sonicom/LICENSE.txt`). Confirmed from the
+dataset authors' own published paper: "The database is publicly
+available under the MIT license at:
+https://transfer.ic.ac.uk:9090/#/2022_SONICOM-HRTF-DATASET/" — no
+separate LICENSE file is published alongside the raw data itself, so
+`LICENSE.txt` renders the standard MIT text with that statement quoted
+as its source.
+
+**Citation** (required whenever this data is used): I. Engel, R.
+Daugintis, T. Vicente, A. O. T. Hogg, J. Pauwels, A. J. Tournier, and L.
+Picinali, "The SONICOM HRTF Dataset," J. Audio Eng. Soc., 2023, and (for
+the extended dataset used here) the Forum Acusticum 2025 companion
+paper, "The Extended SONICOM HRTF Dataset and Spatial Audio Metrics
+Toolbox," arXiv:2507.05053.
 
 ## Synthetic spherical-head model (catalog index, no file)
 
